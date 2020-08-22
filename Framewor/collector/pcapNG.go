@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dreadl0ck/gopacket"
 	"github.com/dreadl0ck/gopacket/pcapgo"
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
 
@@ -41,23 +43,30 @@ func openPcapNG(file string) (*pcapgo.NgReader, *os.File, error) {
 	return r, f, nil
 }
 
-// countPackets returns the number of packets in a PCAP file
+// countPackets returns the number of packets in a PCAP file.
 func countPacketsNG(path string) (count int64, err error) {
 	// get reader and file handle
 	r, f, err := openPcapNG(path)
 	if err != nil {
 		return
 	}
-	defer f.Close()
+
+	defer func() {
+		errClose := f.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println(errClose)
+		}
+	}()
 
 	for {
 		// loop over packets and discard all data
-		_, _, err := r.ZeroCopyReadPacketData()
+		_, _, err = r.ZeroCopyReadPacketData()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
-			return count, errors.Wrap(err, "Error reading packet data: ")
+
+			return count, errors.Wrap(err, "error reading packet data: ")
 		}
 
 		// increment counter
@@ -77,46 +86,78 @@ func (c *Collector) CollectPcapNG(path string) error {
 
 	// file exists.
 	clearLine()
-	println("opening", path+" | size:", humanize.Bytes(uint64(stat.Size())))
+	c.printlnStdOut("opening", path+" | size:", humanize.Bytes(uint64(stat.Size())))
 
 	// set input filesize on collector
 	c.inputSize = stat.Size()
 
 	// display total packet count
-	print("counting packets...")
+	c.printStdOut("counting packets...")
+
 	start := time.Now()
+
 	c.numPackets, err = countPacketsNG(path)
-	if err != nil {
+	if err != nil && !(errors.Is(err, io.EOF)) {
 		return err
 	}
+
 	clearLine()
-	fmt.Println("counting packets... done.", c.numPackets, "packets found in", time.Since(start))
+	c.printlnStdOut("counting packets... done.", c.numPackets, "packets found in", time.Since(start))
 
 	r, f, err := openPcapNG(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+
+	defer func() {
+		errClose := f.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println(errClose)
+		}
+	}()
 
 	// initialize collector
-	if err := c.Init(); err != nil {
+	if err = c.Init(); err != nil {
 		return err
 	}
 
-	print("decoding packets... ")
+	var (
+		data         []byte
+		ci           gopacket.CaptureInfo
+		stopProgress = c.printProgressInterval()
+	)
+
 	for {
-		// fetch the next packetdata and packetheader
-		// for pcapNG this uses ZeroCopyReadPacketData()
-		data, ci, err := r.ZeroCopyReadPacketData()
+		// fetch the next packet data and packet header
+		data, ci, err = r.ReadPacketData()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				break
 			}
-			return errors.Wrap(err, "Error reading packet data")
+
+			return errors.Wrap(err, "error reading packet data")
 		}
+
+		// increment atomic packet counter
+		atomic.AddInt64(&c.current, 1)
+
+		// must be locked, otherwise a race occurs when sending a SIGINT
+		//  and triggering wg.Wait() in another goroutine...
+		c.statMutex.Lock()
+
+		// increment wait group for packet processing
+		c.wg.Add(1)
+
+		c.statMutex.Unlock()
 
 		c.handleRawPacketData(data, ci)
 	}
-	c.cleanup()
+
+	// stop progress reporting
+	stopProgress <- struct{}{}
+
+	// run cleanup on channel exit
+	c.cleanup(false)
+
 	return nil
 }

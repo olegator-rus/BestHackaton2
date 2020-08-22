@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -34,11 +35,13 @@ var fieldsVRRPv2 = []string{
 	"DstIP",
 }
 
-func (a VRRPv2) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *VRRPv2) CSVHeader() []string {
 	return filter(fieldsVRRPv2)
 }
 
-func (a VRRPv2) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *VRRPv2) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -59,12 +62,15 @@ func (a VRRPv2) CSVRecord() []string {
 	})
 }
 
-func (a VRRPv2) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *VRRPv2) Time() string {
 	return a.Timestamp
 }
 
-func (a VRRPv2) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *VRRPv2) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var vrrp2Metric = prometheus.NewCounterVec(
@@ -75,26 +81,26 @@ var vrrp2Metric = prometheus.NewCounterVec(
 	fieldsVRRPv2[1:],
 )
 
-func init() {
-	prometheus.MustRegister(vrrp2Metric)
-}
-
-func (a VRRPv2) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *VRRPv2) Inc() {
 	vrrp2Metric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *VRRPv2) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a VRRPv2) Src() string {
+// Src returns the source address of the audit record.
+func (a *VRRPv2) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a VRRPv2) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *VRRPv2) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

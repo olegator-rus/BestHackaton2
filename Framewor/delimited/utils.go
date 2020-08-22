@@ -1,6 +1,6 @@
 /*
  * NETCAP - Network Capture Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -13,26 +13,22 @@
 
 package delimited
 
-import (
-	"fmt"
-	"io"
-)
-
-// Copy copies each record read from src to sink sequentially until src.Next()
+// copyData copies each record read from src to sink sequentially until src.Next().
 // Note:
-// - returns io.EOF or another error occurs
-func Copy(sink Sink, src DataSource) error {
-	for {
-		record, err := src.Next()
-		switch {
-		case err == io.EOF:
-			return nil
-		case err != nil:
-			return fmt.Errorf("read error while copying: %v", err)
-		default:
-			if err = sink.Put(record); err != nil {
-				return fmt.Errorf("write error while copying: %v", err)
-			}
-		}
-	}
-}
+// - returns io.EOF or another error occurs.
+// func copyData(sink sink, src dataSource) error {
+//	for {
+//		record, err := src.Next()
+//
+//		switch {
+//		case err == io.EOF:
+//			return nil
+//		case err != nil:
+//			return fmt.Errorf("read error while copying: %v", err)
+//		default:
+//			if err = sink.Put(record); err != nil {
+//				return fmt.Errorf("write error while copying: %v", err)
+//			}
+//		}
+//	}
+// }

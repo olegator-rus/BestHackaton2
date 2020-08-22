@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,8 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dreadl0ck/netcap/utils"
-	"github.com/golang/protobuf/proto"
 )
 
 /*
@@ -44,7 +45,6 @@ var auditRecordData = []byte{10, 17, 49, 53, 52, 55, 55, 54, 48, 52, 54, 54, 46,
  */
 
 func TestMarshal(t *testing.T) {
-
 	data, err := proto.Marshal(auditRecord)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,6 @@ func TestMarshal(t *testing.T) {
 // ok  	github.com/dreadl0ck/netcap/types	4.215s
 
 func BenchmarkMarshal(b *testing.B) {
-
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -102,7 +101,6 @@ func BenchmarkMarshal(b *testing.B) {
 }
 
 func BenchmarkUnmarshal(b *testing.B) {
-
 	b.ReportAllocs()
 	b.ResetTimer()
 

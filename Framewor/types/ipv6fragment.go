@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -32,11 +33,13 @@ var fieldsIPv6Fragment = []string{
 	"DstIP",
 }
 
-func (a IPv6Fragment) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *IPv6Fragment) CSVHeader() []string {
 	return filter(fieldsIPv6Fragment)
 }
 
-func (a IPv6Fragment) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *IPv6Fragment) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -54,12 +57,15 @@ func (a IPv6Fragment) CSVRecord() []string {
 	})
 }
 
-func (a IPv6Fragment) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *IPv6Fragment) Time() string {
 	return a.Timestamp
 }
 
-func (a IPv6Fragment) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *IPv6Fragment) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var ipv6fragMetric = prometheus.NewCounterVec(
@@ -70,26 +76,26 @@ var ipv6fragMetric = prometheus.NewCounterVec(
 	fieldsIPv6Fragment[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ipv6fragMetric)
-}
-
-func (a IPv6Fragment) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *IPv6Fragment) Inc() {
 	ipv6fragMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *IPv6Fragment) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a IPv6Fragment) Src() string {
+// Src returns the source address of the audit record.
+func (a *IPv6Fragment) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a IPv6Fragment) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *IPv6Fragment) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

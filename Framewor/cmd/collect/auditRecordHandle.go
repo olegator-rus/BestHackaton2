@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,64 +11,79 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package collect
 
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
+	"runtime"
+	"time"
 
 	gzip "github.com/klauspost/pgzip"
 
 	"github.com/dreadl0ck/netcap"
+	"github.com/dreadl0ck/netcap/decoder"
 	"github.com/dreadl0ck/netcap/delimited"
-	"github.com/dreadl0ck/netcap/encoder"
 	"github.com/dreadl0ck/netcap/types"
 )
 
-// AuditRecordHandle wraps a file handle of a netcap audit record file
-// contains the original file handle and writers to compress and buffer the data
-type AuditRecordHandle struct {
+const directoryPermission = 0o755
+
+// auditRecordHandle wraps a file handle of a netcap audit record file
+// contains the original file handle and writers to compress and buffer the data.
+type auditRecordHandle struct {
 	gWriter *gzip.Writer
 	bWriter *bufio.Writer
 	f       *os.File
 }
 
-// NewAuditRecordHandle creates a new netcap audit record file
-func NewAuditRecordHandle(b *types.Batch, path string) *AuditRecordHandle {
-
-	err := os.MkdirAll(b.ClientID, 0755)
+// newAuditRecordHandle creates a new netcap audit record file.
+func newAuditRecordHandle(b *types.Batch, path string) *auditRecordHandle {
+	err := os.MkdirAll(b.ClientID, directoryPermission)
 	if err != nil {
 		panic(err)
 	}
+
 	f, err := os.Create(path)
 	if err != nil {
 		panic(err)
 	}
+
 	fmt.Println("new audit record handle", path)
 
-	conf := encoder.Config{
-		Source:          b.ClientID,
-		Version:         netcap.Version,
-		IncludePayloads: b.ContainsPayloads,
-		MemBufferSize:   *flagMemBufferSize,
-	}
+	conf := decoder.DefaultConfig
+	conf.Source = b.ClientID
+	conf.IncludePayloads = b.ContainsPayloads
+	conf.MemBufferSize = *flagMemBufferSize
 
 	var (
 		// create buffered writer that writes into the file handle
 		bWriter = bufio.NewWriter(f)
 		// create gzip writer that writes into the buffered writer
-		gWriter = gzip.NewWriter(bWriter)
+		gWriter, errGzipWriter = gzip.NewWriterLevel(bWriter, netcap.DefaultCompressionLevel)
 	)
 
+	if errGzipWriter != nil {
+		panic(errGzipWriter)
+	}
+
+	// To get any performance gains, you should at least be compressing more than 1 megabyte of data at the time.
+	// You should at least have a block size of 100k and at least a number of blocks that match the number of cores
+	// your would like to utilize, but about twice the number of blocks would be the best.
+	if err = gWriter.SetConcurrency(netcap.DefaultCompressionBlockSize, runtime.GOMAXPROCS(0)*2); err != nil {
+		log.Fatal("failed to configure compression package: ", err)
+	}
+
 	// add file header
-	err = delimited.NewWriter(gWriter).PutProto(netcap.NewHeader(b.MessageType, conf.Source, conf.Version, conf.IncludePayloads))
+	err = delimited.NewWriter(gWriter).PutProto(netcap.NewHeader(b.MessageType, conf.Source, netcap.Version, conf.IncludePayloads, time.Now()))
 	if err != nil {
 		fmt.Println("failed to write header")
 		panic(err)
 	}
 
-	return &AuditRecordHandle{
+	return &auditRecordHandle{
 		bWriter: bWriter,
 		gWriter: gWriter,
 		f:       f,

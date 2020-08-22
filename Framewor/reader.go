@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -15,17 +15,17 @@ package netcap
 
 import (
 	"bufio"
+	"compress/gzip"
 	"os"
 	"path/filepath"
 
-	gzip "github.com/klauspost/pgzip"
+	"github.com/gogo/protobuf/proto"
 
 	"github.com/dreadl0ck/netcap/delimited"
 	"github.com/dreadl0ck/netcap/types"
-	proto "github.com/golang/protobuf/proto"
 )
 
-// Reader implements reading netcap files
+// Reader implements reading netcap audit record files.
 type Reader struct {
 	file    *os.File
 	bReader *bufio.Reader
@@ -33,7 +33,7 @@ type Reader struct {
 	dReader *delimited.Reader
 }
 
-// Open a file
+// Open a netcap audit record file for reading.
 func Open(file string, memBufSize int) (*Reader, error) {
 	r := &Reader{}
 
@@ -54,6 +54,7 @@ func Open(file string, memBufSize int) (*Reader, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		r.dReader = delimited.NewReader(r.gReader)
 	} else {
 		r.dReader = delimited.NewReader(r.bReader)
@@ -62,7 +63,7 @@ func Open(file string, memBufSize int) (*Reader, error) {
 	return r, nil
 }
 
-// Close the file
+// Close the file.
 func (r *Reader) Close() error {
 	if r.gReader != nil {
 		err := r.gReader.Close()
@@ -70,27 +71,31 @@ func (r *Reader) Close() error {
 			return err
 		}
 	}
+
 	err := r.file.Sync()
 	if err != nil {
 		return err
 	}
+
 	return r.file.Close()
 }
 
-// Next Message
+// Next Message.
 func (r *Reader) Next(msg proto.Message) error {
 	return r.dReader.NextProto(msg)
 }
 
-// ReadHeader reads the file header
-func (r *Reader) ReadHeader() *types.Header {
+// ReadHeader reads the file header.
+func (r *Reader) ReadHeader() (*types.Header, error) {
 	// read netcap header
 	var (
 		header = new(types.Header)
 		err    = r.Next(header)
 	)
+
 	if err != nil {
 		panic("invalid netcap header in file: " + r.file.Name() + ", error: " + err.Error())
 	}
-	return header
+
+	return header, err
 }

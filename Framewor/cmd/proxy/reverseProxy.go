@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package proxy
 
 import (
 	"crypto/tls"
@@ -21,29 +21,30 @@ import (
 	"net/url"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
-
-	"go.uber.org/zap"
+	"github.com/dreadl0ck/netcap/utils"
 )
 
-// ReverseProxy represents a named reverse proxy
-// that uses a custom http.Transport to export netcap audit records
-type ReverseProxy struct {
+// reverseProxy represents a named reverse proxy
+// that uses a custom http.Transport to export netcap audit records.
+type reverseProxy struct {
 	Name   string
 	rp     *httputil.ReverseProxy
-	writer *netcap.Writer
+	writer netcap.AuditRecordWriter
 }
 
-// ServeHTTP implements the http.Handler interface
-func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP implements the http.Handler interface.
+func (p *reverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.rp.ServeHTTP(w, r)
 }
 
-// ReverseProxyConfig represents the configuration of a single reverse proxy
+// reverseProxyConfig represents the configuration of a single reverse proxy
 // if the TLS field is set to true
-// paths to the cert and key files must be specified
-type ReverseProxyConfig struct {
+// paths to the cert and key files must be specified.
+type reverseProxyConfig struct {
 
 	// Remote endpoint address
 	Remote string `yaml:"remote"`
@@ -55,12 +56,11 @@ type ReverseProxyConfig struct {
 	TLS bool `yaml:"tls"`
 }
 
-// NewReverseProxy creates a ReverseProxy instance for the given target URL
-// and sets the specified name
-func NewReverseProxy(proxyName string, targetURL *url.URL) *ReverseProxy {
-
+// newReverseProxy creates a reverseProxy instance for the given target URL
+// and sets the specified name.
+func newReverseProxy(proxyName string, targetURL *url.URL) *reverseProxy {
 	// instantiate proxy
-	proxy := &ReverseProxy{
+	proxy := &reverseProxy{
 		Name: proxyName,
 		rp:   httputil.NewSingleHostReverseProxy(targetURL),
 	}
@@ -69,7 +69,7 @@ func NewReverseProxy(proxyName string, targetURL *url.URL) *ReverseProxy {
 	proxy.rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		// reply with BadGateway
 		w.WriteHeader(http.StatusBadGateway)
-		Log.Error("reverse proxy encountered an error",
+		logger.Error("reverse proxy encountered an error",
 			zap.String("host", r.URL.Host),
 			zap.String("path", r.URL.Path),
 			zap.String("method", r.Method),
@@ -79,7 +79,7 @@ func NewReverseProxy(proxyName string, targetURL *url.URL) *ReverseProxy {
 
 	// overwrite transport for reverse proxy
 	// (needed to implement a custom roundtripper that collects metrics for us)
-	proxy.rp.Transport = &NetcapTransport{
+	proxy.rp.Transport = &netcapTransport{
 
 		targetURL: targetURL,
 		proxyName: proxyName,
@@ -92,7 +92,6 @@ func NewReverseProxy(proxyName string, targetURL *url.URL) *ReverseProxy {
 			DialContext: (&net.Dialer{
 				Timeout:   time.Duration(*flagDialTimeout) * time.Second,
 				KeepAlive: 30 * time.Second,
-				DualStack: true,
 			}).DialContext,
 
 			Proxy:        http.ProxyFromEnvironment,
@@ -103,14 +102,32 @@ func NewReverseProxy(proxyName string, targetURL *url.URL) *ReverseProxy {
 			TLSHandshakeTimeout:   time.Duration(*flagTLSHandshakeTimeout) * time.Second,
 			ExpectContinueTimeout: 5 * time.Second,
 
+			/* #nosec */
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: *flagSkipTLSVerify,
 			},
 		},
 	}
 
-	proxy.writer = netcap.NewWriter("HTTP["+targetURL.Host+"]", true, true, false, "", false, *flagMemBufferSize)
-	proxy.writer.WriteHeader(types.Type_NC_HTTP, targetURL.String(), netcap.Version, false)
+	proxy.writer = netcap.NewAuditRecordWriter(&netcap.WriterConfig{
+		CSV:              false,
+		Proto:            true,
+		JSON:             false,
+		Name:             "HTTP[" + targetURL.Host + "]",
+		Buffer:           false,
+		Compress:         false,
+		Out:              "",
+		MemBufferSize:    *flagMemBufferSize,
+		Source:           targetURL.String(),
+		Version:          netcap.Version,
+		IncludesPayloads: false,
+		StartTime:        time.Now(),
+	})
+
+	err := proxy.writer.WriteHeader(types.Type_NC_HTTP)
+	if err != nil {
+		utils.DebugLog.Println("failed to write file header:", err)
+	}
 
 	return proxy
 }

@@ -1,0 +1,10 @@
+<MaltegoEntity id="netcap.IPv6" displayName="IPv6" displayNamePlural="IPv6" description="Internet Protocol version 6 (IPv6) is the most recent version of the Internet Protocol (IP), the communications protocol that provides an identification and location system for computers on networks and routes traffic across the Internet" category="Netcap" smallIconResource="Netcap/IPv6" largeIconResource="Netcap/IPv6" allowedRoot="true" conversionOrder="2147483647" visible="true">
+ <Properties value="properties.ipv6" displayValue="properties.ipv6">
+  <Groups></Groups>
+  <Fields>
+   <Field name="properties.ipv6" type="string" nullable="true" hidden="false" readonly="false" description="" displayName="IPv6">
+    <SampleValue>-</SampleValue>
+   </Field>
+  </Fields>
+ </Properties>
+</MaltegoEntity>

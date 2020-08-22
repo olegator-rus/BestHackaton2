@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -32,111 +33,116 @@ var fieldsLLDI = []string{
 	"Unknown",
 }
 
-func (l LinkLayerDiscoveryInfo) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (l *LinkLayerDiscoveryInfo) CSVHeader() []string {
 	return filter(fieldsLLDI)
 }
 
-func (l LinkLayerDiscoveryInfo) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (l *LinkLayerDiscoveryInfo) CSVRecord() []string {
 	var (
 		tlvs   = make([]string, len(l.OrgTLVs))
 		values = make([]string, len(l.Unknown))
 	)
 	for i, v := range l.OrgTLVs {
-		tlvs[i] = v.ToString()
+		tlvs[i] = v.toString()
 	}
 	for i, v := range l.Unknown {
-		values[i] = v.ToString()
+		values[i] = v.toString()
 	}
 	return filter([]string{
 		formatTimestamp(l.Timestamp),
 		l.PortDescription,            // string
 		l.SysName,                    // string
 		l.SysDescription,             // string
-		l.SysCapabilities.ToString(), // *LLDPSysCapabilities
-		l.MgmtAddress.ToString(),     // *LLDPMgmtAddress
+		l.SysCapabilities.toString(), // *LLDPSysCapabilities
+		l.MgmtAddress.toString(),     // *LLDPMgmtAddress
 		strings.Join(tlvs, ""),       // []*LLDPOrgSpecificTLV
 		strings.Join(values, ""),     // []*LinkLayerDiscoveryValue
 	})
 }
 
-func (l LinkLayerDiscoveryInfo) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (l *LinkLayerDiscoveryInfo) Time() string {
 	return l.Timestamp
 }
 
-func (lldsc *LLDPSysCapabilities) ToString() string {
-	return lldsc.SystemCap.ToString() + lldsc.EnabledCap.ToString()
+func (lldsc *LLDPSysCapabilities) toString() string {
+	return lldsc.SystemCap.toString() + lldsc.EnabledCap.toString()
 }
 
-func (lldma *LLDPMgmtAddress) ToString() string {
+func (lldma *LLDPMgmtAddress) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(lldma.Subtype)) // int32   // byte
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(lldma.Address)) // bytes
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(lldma.InterfaceSubtype)) // int32   // byte
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatUint(uint64(lldma.InterfaceNumber), 10)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(lldma.OID) // string
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (lldst *LLDPOrgSpecificTLV) ToString() string {
+func (lldst *LLDPOrgSpecificTLV) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(strconv.FormatUint(uint64(lldst.OUI), 10))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(lldst.SubType))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(lldst.Info))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (lldv *LinkLayerDiscoveryValue) ToString() string {
+func (lldv *LinkLayerDiscoveryValue) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(lldv.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(lldv.Length))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(lldv.Value))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (c *LLDPCapabilities) ToString() string {
+func (c *LLDPCapabilities) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(strconv.FormatBool(c.Other))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.Repeater))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.Bridge))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.WLANAP))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.Router))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.Phone))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.DocSis))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.StationOnly))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.CVLAN))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.SVLAN))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(c.TMPR))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (a LinkLayerDiscoveryInfo) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (l *LinkLayerDiscoveryInfo) JSON() (string, error) {
+	l.Timestamp = utils.TimeToUnixMilli(l.Timestamp)
+	return jsonMarshaler.MarshalToString(l)
 }
 
 var lldiMetric = prometheus.NewCounterVec(
@@ -147,21 +153,21 @@ var lldiMetric = prometheus.NewCounterVec(
 	fieldsLLDI[1:],
 )
 
-func init() {
-	prometheus.MustRegister(lldiMetric)
+// Inc increments the metrics for the audit record.
+func (l *LinkLayerDiscoveryInfo) Inc() {
+	lldiMetric.WithLabelValues(l.CSVRecord()[1:]...).Inc()
 }
 
-func (a LinkLayerDiscoveryInfo) Inc() {
-	lldiMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (l *LinkLayerDiscoveryInfo) SetPacketContext(*PacketContext) {}
 
-func (a *LinkLayerDiscoveryInfo) SetPacketContext(ctx *PacketContext) {}
-
-// TODO
-func (a LinkLayerDiscoveryInfo) Src() string {
+// Src TODO.
+// Src returns the source address of the audit record.
+func (l *LinkLayerDiscoveryInfo) Src() string {
 	return ""
 }
 
-func (a LinkLayerDiscoveryInfo) Dst() string {
+// Dst returns the destination address of the audit record.
+func (l *LinkLayerDiscoveryInfo) Dst() string {
 	return ""
 }

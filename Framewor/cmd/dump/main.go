@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,28 +11,39 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package dump
 
 import (
-	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/evilsocket/islazy/tui"
+	"github.com/mgutz/ansi"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	"github.com/evilsocket/islazy/tui"
-	"github.com/mgutz/ansi"
 )
 
-func main() {
-
+// Run parses the subcommand flags and handles the arguments.
+func Run() {
 	// parse commandline flags
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.Usage = printUsage
+
+	err := fs.Parse(os.Args[2:])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *flagGenerateConfig {
+		netcap.GenerateConfig(fs, "dump")
+
+		return
+	}
 
 	// print version and exit
 	if *flagVersion {
@@ -43,7 +54,7 @@ func main() {
 	// abort if there is no input or no live capture
 	if *flagInput == "" {
 		printHeader()
-		fmt.Println(ansi.Red + "> nothing to do. need a NETCAP audit record file (.ncap.gz or .ncap) with the read flag (-r)" + ansi.Reset)
+		fmt.Println(ansi.Red + "> nothing to do. need a NETCAP audit record file (.ncap.gz or .ncap) with the read flag (-read)" + ansi.Reset)
 		os.Exit(1)
 	}
 
@@ -55,17 +66,17 @@ func main() {
 	}
 
 	// read dumpfile header and exit
-	if *flagHeader {
-
-		// open input file for reading
-		r, err := netcap.Open(*flagInput, *flagMemBufferSize)
-		if err != nil {
-			panic(err)
+	if *flagHeader { // open input file for reading
+		r, errOpen := netcap.Open(*flagInput, *flagMemBufferSize)
+		if errOpen != nil {
+			panic(errOpen)
 		}
 
 		// get header
-		// this will panic if the header is corrupted
-		h := r.ReadHeader()
+		h, errFileHeader := r.ReadHeader()
+		if errFileHeader != nil {
+			log.Fatal(errFileHeader)
+		}
 
 		// print result as table
 		tui.Table(os.Stdout, []string{"Field", "Value"}, [][]string{
@@ -79,13 +90,14 @@ func main() {
 	}
 
 	// set separators for sub structures in CSV
-	types.Begin = *flagBegin
-	types.End = *flagEnd
-	types.Separator = *flagStructSeparator
+	types.StructureBegin = *flagBegin
+	types.StructureEnd = *flagEnd
+	types.FieldSeparator = *flagStructSeparator
 
 	// read ncap file and print to stdout
 	if filepath.Ext(*flagInput) == ".ncap" || filepath.Ext(*flagInput) == ".gz" {
-		netcap.Dump(
+		err = netcap.Dump(
+			os.Stdout,
 			netcap.DumpConfig{
 				Path:         *flagInput,
 				Separator:    *flagSeparator,
@@ -96,8 +108,14 @@ func main() {
 				UTC:          *flagUTC,
 				Fields:       *flagFields,
 				JSON:         *flagJSON,
+				CSV:          *flagCSV,
+				ForceColors:  *flagForceColors,
 			},
 		)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		return
 	}
 }

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -28,11 +29,13 @@ var fieldsIPSecESP = []string{
 	"DstIP", // string
 }
 
-func (a IPSecESP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *IPSecESP) CSVHeader() []string {
 	return filter(fieldsIPSecESP)
 }
 
-func (a IPSecESP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *IPSecESP) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -47,12 +50,15 @@ func (a IPSecESP) CSVRecord() []string {
 	})
 }
 
-func (a IPSecESP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *IPSecESP) Time() string {
 	return a.Timestamp
 }
 
-func (a IPSecESP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *IPSecESP) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var ipSecEspMetric = prometheus.NewCounterVec(
@@ -63,26 +69,26 @@ var ipSecEspMetric = prometheus.NewCounterVec(
 	fieldsIPSecESP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ipSecEspMetric)
-}
-
-func (a IPSecESP) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *IPSecESP) Inc() {
 	ipSecEspMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *IPSecESP) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a IPSecESP) Src() string {
+// Src returns the source address of the audit record.
+func (a *IPSecESP) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a IPSecESP) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *IPSecESP) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

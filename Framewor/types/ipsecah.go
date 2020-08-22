@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -30,11 +31,13 @@ var fieldsIPSecAH = []string{
 	"DstIP", // string
 }
 
-func (a IPSecAH) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *IPSecAH) CSVHeader() []string {
 	return filter(fieldsIPSecAH)
 }
 
-func (a IPSecAH) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *IPSecAH) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -50,12 +53,15 @@ func (a IPSecAH) CSVRecord() []string {
 	})
 }
 
-func (a IPSecAH) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *IPSecAH) Time() string {
 	return a.Timestamp
 }
 
-func (a IPSecAH) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *IPSecAH) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var ipSecAhMetric = prometheus.NewCounterVec(
@@ -66,26 +72,26 @@ var ipSecAhMetric = prometheus.NewCounterVec(
 	fieldsIPSecAH[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ipSecAhMetric)
-}
-
-func (a IPSecAH) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *IPSecAH) Inc() {
 	ipSecAhMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *IPSecAH) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a IPSecAH) Src() string {
+// Src returns the source address of the audit record.
+func (a *IPSecAH) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a IPSecAH) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *IPSecAH) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

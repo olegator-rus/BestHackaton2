@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,12 +11,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-// Implements mapping alerts from suricata to netcap audit records
+// Package label implements mapping alerts from suricata to netcap audit records
 package label
 
 import (
 	"fmt"
-	"github.com/dreadl0ck/netcap/utils"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,20 +23,23 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"github.com/dreadl0ck/netcap"
-	pb "gopkg.in/cheggaaa/pb.v1"
+	"github.com/dreadl0ck/netcap/utils"
 )
 
 var (
-	// UseProgressBars whether to use the progress bar
+	// UseProgressBars whether to use the progress bar.
 	UseProgressBars = false
-	// ClassificationMap map of classifications
-	ClassificationMap = make(map[string]int)
+	// classificationMap map of classifications.
+	classificationMap = make(map[string]int)
 	excluded          = make(map[string]bool)
 
+	// Debug mode.
 	Debug bool
 
-	RemoveFilesWithoutMatches = false
+	removeFilesWithoutMatches = false
 )
 
 func debug(args ...interface{}) {
@@ -65,7 +67,6 @@ func SetExcluded(arg string) {
 }
 
 func finish(wg *sync.WaitGroup, r *netcap.Reader, f *os.File, labelsTotal int, outFileName string, progress *pb.ProgressBar) {
-
 	if UseProgressBars {
 		progress.Finish()
 	}
@@ -87,7 +88,8 @@ func finish(wg *sync.WaitGroup, r *netcap.Reader, f *os.File, labelsTotal int, o
 		log.Fatal("failed to close", outFileName, ", error:", err)
 	}
 
-	if RemoveFilesWithoutMatches {
+	if //goland:noinspection GoBoolExpressions
+	removeFilesWithoutMatches {
 		// remove file that did not have any matching labels
 		if labelsTotal == 0 {
 			if err := os.Remove(outFileName); err != nil {

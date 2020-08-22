@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,33 +11,44 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 
-	gzip "github.com/klauspost/pgzip"
-
 	"github.com/dreadl0ck/cryptoutils"
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/collector"
-	"github.com/dreadl0ck/netcap/encoder"
+	"github.com/dreadl0ck/netcap/decoder"
+	"github.com/dreadl0ck/netcap/resolvers"
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	"github.com/gogo/protobuf/proto"
 )
 
-func main() {
-
+// Run parses the subcommand flags and handles the arguments.
+func Run() {
 	// parse commandline flags
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.Usage = printUsage
+
+	err := fs.Parse(os.Args[2:])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *flagGenerateConfig {
+		netcap.GenerateConfig(fs, "agent")
+
+		return
+	}
 
 	// print version and exit
 	if *flagVersion {
@@ -61,18 +72,21 @@ func main() {
 
 	// decode server public key
 	var serverPubKey [cryptoutils.KeySize]byte
+
 	_, err = hex.Decode(serverPubKey[:], pubKeyContents)
 	if err != nil {
 		panic(err)
 	}
 
-	if *flagEncoders {
-		encoder.ShowEncoders()
+	if *flagDecoders {
+		decoder.ShowDecoders(true)
+
 		return
 	}
 
 	if *flagListInterfaces {
 		utils.ListAllNetworkInterfaces()
+
 		return
 	}
 
@@ -84,35 +98,60 @@ func main() {
 
 	// init collector
 	c := collector.New(collector.Config{
-		Live:                true,
 		Workers:             *flagWorkers,
 		PacketBufferSize:    *flagPacketBuffer,
 		WriteUnknownPackets: false,
 		Promisc:             *flagPromiscMode,
 		SnapLen:             *flagSnapLen,
-		EncoderConfig: encoder.Config{
-			// needs to be disabled for batch mode
-			Buffer:          false,
-			Compression:     false,
-			CSV:             false,
-			IncludeEncoders: *flagInclude,
-			ExcludeEncoders: *flagExclude,
-			Out:             "",
-			Version:         netcap.Version,
-			Source:          *flagInterface,
-
-			// set channel writer
-			WriteChan:       true,
-			IncludePayloads: *flagPayload,
-			AddContext:      *flagContext,
-			MemBufferSize:   *flagMemBufferSize,
+		LogErrors:           *flagLogErrors,
+		DecoderConfig: &decoder.Config{
+			Buffer:               false,
+			Compression:          false,
+			CSV:                  false,
+			Chan:                 true,
+			ChanSize:             *flagChanSize,
+			IncludeDecoders:      *flagInclude,
+			ExcludeDecoders:      *flagExclude,
+			Out:                  "",
+			Source:               *flagInterface,
+			IncludePayloads:      *flagPayload,
+			AddContext:           *flagContext,
+			MemBufferSize:        *flagMemBufferSize,
+			FlushEvery:           *flagFlushevery,
+			DefragIPv4:           *flagDefragIPv4,
+			Checksum:             *flagChecksum,
+			NoOptCheck:           *flagNooptcheck,
+			IgnoreFSMerr:         *flagIgnorefsmerr,
+			AllowMissingInit:     *flagAllowmissinginit,
+			Debug:                *flagDebug,
+			HexDump:              *flagHexdump,
+			WaitForConnections:   *flagWaitForConnections,
+			WriteIncomplete:      *flagWriteincomplete,
+			MemProfile:           *flagMemprofile,
+			ConnFlushInterval:    *flagConnFlushInterval,
+			ConnTimeOut:          *flagConnTimeOut,
+			FlowFlushInterval:    *flagFlowFlushInterval,
+			FlowTimeOut:          *flagFlowTimeOut,
+			CloseInactiveTimeOut: *flagCloseInactiveTimeout,
+			ClosePendingTimeOut:  *flagClosePendingTimeout,
+			FileStorage:          *flagFileStorage,
+			CalculateEntropy:     *flagCalcEntropy,
 		},
+		ResolverConfig: resolvers.Config{
+			ReverseDNS:    *flagReverseDNS,
+			LocalDNS:      *flagLocalDNS,
+			MACDB:         *flagMACDB,
+			Ja3DB:         *flagJa3DB,
+			ServiceDB:     *flagServiceDB,
+			GeolocationDB: *flagGeolocationDB,
+		},
+		DPI:           *flagDPI,
 		BaseLayer:     utils.GetBaseLayer(*flagBaseLayer),
 		DecodeOptions: utils.GetDecodeOptions(*flagDecodeOptions),
 	})
 
 	// initialize batching
-	chans, handle, err := c.InitBatching(*flagMaxSize, *flagBPF, *flagInterface)
+	chans, handle, err := c.InitBatching(*flagBPF, *flagInterface)
 	if err != nil {
 		panic(err)
 	}
@@ -123,13 +162,11 @@ func main() {
 	// get client id
 	// currently the user name is used for this
 	// TODO: generate a unique numerical identifier instead
-	var userName = os.Getenv("USER")
+	userName := os.Getenv("USER")
 	fmt.Println("\n["+userName+"] got", len(chans), "channels")
 
 	// iterate over encoder channels
-	for _, bi := range chans {
-
-		// create a copy of loop variable
+	for _, bi := range chans { // create a copy of loop variable
 		info := collector.BatchInfo{
 			Type: bi.Type,
 			Chan: bi.Chan,
@@ -137,12 +174,13 @@ func main() {
 
 		// handle channel goroutine
 		go func() {
-
-			var leftOverBuf []byte
+			var (
+				leftOverBuf []byte
+				data        []byte
+			)
 
 			// send data loop
 			for {
-
 				var (
 					b    = &types.Batch{}
 					size []byte
@@ -164,13 +202,10 @@ func main() {
 
 				// read chan loop
 				for {
-
 					select {
-					case data := <-info.Chan:
-
+					case data = <-info.Chan:
 						// message complete
 						if len(size) != 0 {
-
 							fmt.Println("got", len(data), "bytes of type", info.Type, "expected", size)
 
 							// calculate new size
@@ -179,7 +214,8 @@ func main() {
 							// if the new size would exceed the maximum size
 							if newSize > int32(*flagMaxSize) {
 								// buffer and break from loop
-								leftOverBuf = append(size, data...)
+								leftOverBuf = append(size, data...) //nolint:gocritic // append to different slice is intended here!
+
 								goto send
 							}
 
@@ -191,6 +227,7 @@ func main() {
 
 							// reset size slice
 							size = []byte{}
+
 							continue
 						}
 
@@ -207,15 +244,18 @@ func main() {
 				fmt.Println("\nBatch done!", b.TotalSize, len(b.Data), b.ClientID, b.MessageType)
 
 				// marshal batch
-				d, err := proto.Marshal(b)
+				data, err = proto.Marshal(b)
 				if err != nil {
 					panic(err)
 				}
 
 				// compress data
-				var buf bytes.Buffer
-				gw := gzip.NewWriter(&buf)
-				_, err = gw.Write(d)
+				var (
+					buf bytes.Buffer
+					gw  = gzip.NewWriter(&buf)
+				)
+
+				_, err = gw.Write(data)
 				if err != nil {
 					panic(err)
 				}
@@ -233,7 +273,9 @@ func main() {
 				}
 
 				// encrypt payload
-				encData, err := cryptoutils.AsymmetricEncrypt(buf.Bytes(), &serverPubKey, priv)
+				var encData []byte
+
+				encData, err = cryptoutils.AsymmetricEncrypt(buf.Bytes(), &serverPubKey, priv)
 				if err != nil {
 					panic(err)
 				}

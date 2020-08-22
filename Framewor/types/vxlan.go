@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -32,11 +33,13 @@ var fieldsVXLAN = []string{
 	"DstIP",
 }
 
-func (a VXLAN) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *VXLAN) CSVHeader() []string {
 	return filter(fieldsVXLAN)
 }
 
-func (a VXLAN) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *VXLAN) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -54,12 +57,15 @@ func (a VXLAN) CSVRecord() []string {
 	})
 }
 
-func (a VXLAN) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *VXLAN) Time() string {
 	return a.Timestamp
 }
 
-func (a VXLAN) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *VXLAN) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var vxlanMetric = prometheus.NewCounterVec(
@@ -70,26 +76,26 @@ var vxlanMetric = prometheus.NewCounterVec(
 	fieldsVXLAN[1:],
 )
 
-func init() {
-	prometheus.MustRegister(vxlanMetric)
-}
-
-func (a VXLAN) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *VXLAN) Inc() {
 	vxlanMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *VXLAN) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a VXLAN) Src() string {
+// Src returns the source address of the audit record.
+func (a *VXLAN) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a VXLAN) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *VXLAN) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

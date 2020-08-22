@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,10 +11,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package capture
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/dreadl0ck/netcap"
@@ -23,14 +22,14 @@ import (
 func printHeader() {
 	netcap.PrintLogo()
 	fmt.Println()
-	fmt.Println("usage examples:")
-	fmt.Println("	$ net.capture -r dump.pcap")
-	fmt.Println("	$ net.capture -iface eth0")
+	fmt.Println("capture tool usage examples:")
+	fmt.Println("	$ net capture -read dump.pcap")
+	fmt.Println("	$ net capture -iface eth0")
 	fmt.Println()
 }
 
-// usage prints the use
+// usage prints the use.
 func printUsage() {
 	printHeader()
-	flag.PrintDefaults()
+	fs.PrintDefaults()
 }

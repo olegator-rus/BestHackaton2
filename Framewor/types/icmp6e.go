@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -27,11 +28,13 @@ var fieldsICMPv6Echo = []string{
 	"DstIP",
 }
 
-func (i ICMPv6Echo) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (i *ICMPv6Echo) CSVHeader() []string {
 	return filter(fieldsICMPv6Echo)
 }
 
-func (i ICMPv6Echo) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (i *ICMPv6Echo) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if i.Context == nil {
 		i.Context = &PacketContext{}
@@ -45,12 +48,15 @@ func (i ICMPv6Echo) CSVRecord() []string {
 	})
 }
 
-func (i ICMPv6Echo) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (i *ICMPv6Echo) Time() string {
 	return i.Timestamp
 }
 
-func (a ICMPv6Echo) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (i *ICMPv6Echo) JSON() (string, error) {
+	i.Timestamp = utils.TimeToUnixMilli(i.Timestamp)
+	return jsonMarshaler.MarshalToString(i)
 }
 
 var icmp6eMetric = prometheus.NewCounterVec(
@@ -61,28 +67,28 @@ var icmp6eMetric = prometheus.NewCounterVec(
 	fieldsICMPv6Echo[1:],
 )
 
-func init() {
-	prometheus.MustRegister(icmp6eMetric)
+// Inc increments the metrics for the audit record.
+func (i *ICMPv6Echo) Inc() {
+	icmp6eMetric.WithLabelValues(i.CSVRecord()[1:]...).Inc()
 }
 
-func (a ICMPv6Echo) Inc() {
-	icmp6eMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (i *ICMPv6Echo) SetPacketContext(ctx *PacketContext) {
+	i.Context = ctx
 }
 
-func (a *ICMPv6Echo) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a ICMPv6Echo) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (i *ICMPv6Echo) Src() string {
+	if i.Context != nil {
+		return i.Context.SrcIP
 	}
 	return ""
 }
 
-func (a ICMPv6Echo) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (i *ICMPv6Echo) Dst() string {
+	if i.Context != nil {
+		return i.Context.DstIP
 	}
 	return ""
 }

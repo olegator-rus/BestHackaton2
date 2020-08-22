@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -46,11 +47,13 @@ var fieldsEAPOLKey = []string{
 	"EncryptedKeyData",     // []byte
 }
 
-func (a EAPOLKey) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *EAPOLKey) CSVHeader() []string {
 	return filter(fieldsEAPOLKey)
 }
 
-func (a EAPOLKey) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *EAPOLKey) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(a.Timestamp),
 		formatInt32(a.KeyDescriptorType),          // int32
@@ -77,12 +80,15 @@ func (a EAPOLKey) CSVRecord() []string {
 	})
 }
 
-func (a EAPOLKey) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *EAPOLKey) Time() string {
 	return a.Timestamp
 }
 
-func (a EAPOLKey) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *EAPOLKey) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var eapPolKeyMetric = prometheus.NewCounterVec(
@@ -93,21 +99,21 @@ var eapPolKeyMetric = prometheus.NewCounterVec(
 	fieldsEAPOLKey[1:],
 )
 
-func init() {
-	prometheus.MustRegister(eapPolKeyMetric)
-}
-
-func (a EAPOLKey) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *EAPOLKey) Inc() {
 	eapPolKeyMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a *EAPOLKey) SetPacketContext(ctx *PacketContext) {}
+// SetPacketContext sets the associated packet context for the audit record.
+func (a *EAPOLKey) SetPacketContext(*PacketContext) {}
 
-// TODO: return Mac addr
-func (a EAPOLKey) Src() string {
+// Src TODO: return Mac addr.
+// Src returns the source address of the audit record.
+func (a *EAPOLKey) Src() string {
 	return ""
 }
 
-func (a EAPOLKey) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *EAPOLKey) Dst() string {
 	return ""
 }

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -43,14 +44,16 @@ var fieldsDHCPv4 = []string{
 	"DstPort",
 }
 
-func (d DHCPv4) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (d *DHCPv4) CSVHeader() []string {
 	return filter(fieldsDHCPv4)
 }
 
-func (d DHCPv4) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (d *DHCPv4) CSVRecord() []string {
 	var opts []string
 	for _, o := range d.Options {
-		opts = append(opts, o.ToString())
+		opts = append(opts, o.toString())
 	}
 	// prevent accessing nil pointer
 	if d.Context == nil {
@@ -80,24 +83,27 @@ func (d DHCPv4) CSVRecord() []string {
 	})
 }
 
-func (d DHCPv4) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (d *DHCPv4) Time() string {
 	return d.Timestamp
 }
 
-func (d DHCPOption) ToString() string {
+func (d DHCPOption) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(d.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.Length))
-	b.WriteString(Separator)
-	b.WriteString(hex.EncodeToString(d.Data))
-	b.WriteString(End)
+	b.WriteString(FieldSeparator)
+	b.WriteString(d.Data)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (a DHCPv4) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (d *DHCPv4) JSON() (string, error) {
+	d.Timestamp = utils.TimeToUnixMilli(d.Timestamp)
+	return jsonMarshaler.MarshalToString(d)
 }
 
 var dhcp4Metric = prometheus.NewCounterVec(
@@ -108,28 +114,28 @@ var dhcp4Metric = prometheus.NewCounterVec(
 	fieldsDHCPv4[1:],
 )
 
-func init() {
-	prometheus.MustRegister(dhcp4Metric)
+// Inc increments the metrics for the audit record.
+func (d *DHCPv4) Inc() {
+	dhcp4Metric.WithLabelValues(d.CSVRecord()[1:]...).Inc()
 }
 
-func (a DHCPv4) Inc() {
-	dhcp4Metric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (d *DHCPv4) SetPacketContext(ctx *PacketContext) {
+	d.Context = ctx
 }
 
-func (a *DHCPv4) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a DHCPv4) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (d *DHCPv4) Src() string {
+	if d.Context != nil {
+		return d.Context.SrcIP
 	}
 	return ""
 }
 
-func (a DHCPv4) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (d *DHCPv4) Dst() string {
+	if d.Context != nil {
+		return d.Context.DstIP
 	}
 	return ""
 }

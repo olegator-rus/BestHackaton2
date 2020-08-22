@@ -1,28 +1,34 @@
 package label
 
 import (
+	"errors"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	"github.com/gogo/protobuf/proto"
-	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
-// HTTP labels http.
-func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separator, selection string) *pb.ProgressBar {
+// labelHTTP labels http.
+func labelHTTP(wg *sync.WaitGroup, file string, alerts []*suricataAlert, outDir, separator, selection string) *pb.ProgressBar {
 	var (
-		fname       = filepath.Join(outDir, file)
-		total       = netcap.Count(fname)
-		labelsTotal = 0
-		progress    = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
-		outFileName = filepath.Join(outDir, "HTTP_labeled.csv")
+		fname           = filepath.Join(outDir, file)
+		total, errCount = netcap.Count(fname)
+		labelsTotal     = 0
+		progress        = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
+		outFileName     = filepath.Join(outDir, "HTTP_labeled.csv")
 	)
+	if errCount != nil {
+		log.Fatal("failed to count audit records:", errCount)
+	}
 
 	go func() {
 		r, err := netcap.Open(fname, netcap.DefaultBufferSize)
@@ -31,7 +37,11 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 		}
 
 		// read netcap header
-		header := r.ReadHeader()
+		header, errFileHeader := r.ReadHeader()
+		if errFileHeader != nil {
+			log.Fatal(errFileHeader)
+		}
+
 		if header.Type != types.Type_NC_HTTP {
 			panic("file does not contain HTTP records: " + header.Type.String())
 		}
@@ -64,8 +74,8 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 
 	read:
 		for {
-			err := r.Next(http)
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err = r.Next(http)
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				break
 			} else if err != nil {
 				panic(err)
@@ -81,7 +91,6 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 			// since an alert can either refer to the HTTP request or the response
 			// additionally one of the involved ports must be 80
 			for _, a := range alerts {
-
 				// if http request timestamp matches an alert -> label instantly
 				if a.Timestamp == http.Timestamp ||
 
@@ -95,9 +104,7 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 						(http.DstIP == a.SrcIP || http.DstIP == a.DstIP)) &&
 
 						// AND either source or dest port of alert must be port 80
-						(a.SrcPort == 80 || a.DstPort == 80) {
-
-					// fmt.Println("DEBUG: http label match, http TS", http.Timestamp, "alert TS", a.Timestamp)
+						(a.SrcPort == 80 || a.DstPort == 80) { // fmt.Println("DEBUG: http label match, http TS", http.Timestamp, "alert TS", a.Timestamp)
 
 					if CollectLabels {
 						// only if it is not already part of the label
@@ -108,11 +115,12 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 								finalLabel += " | " + a.Classification
 							}
 						}
+
 						continue
 					}
 
 					// add label
-					f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + a.Classification + "\n")
+					_, _ = f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + a.Classification + "\n")
 					labelsTotal++
 
 					goto read
@@ -121,13 +129,14 @@ func HTTP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, sepa
 
 			if len(finalLabel) != 0 {
 				// add final label
-				f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + finalLabel + "\n")
+				_, _ = f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + finalLabel + "\n")
 				labelsTotal++
+
 				goto read
 			}
 
 			// label as normal
-			f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + "normal\n")
+			_, _ = f.WriteString(strings.Join(http.CSVRecord(), separator) + separator + "normal\n")
 		}
 		finish(wg, r, f, labelsTotal, outFileName, progress)
 	}()

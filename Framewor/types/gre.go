@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -45,11 +46,13 @@ var fieldsGRE = []string{
 	"DstPort",
 }
 
-func (a GRE) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *GRE) CSVHeader() []string {
 	return filter(fieldsGRE)
 }
 
-func (a GRE) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *GRE) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -71,7 +74,7 @@ func (a GRE) CSVRecord() []string {
 		formatUint32(a.Key),                     // uint32
 		formatUint32(a.Seq),                     // uint32
 		formatUint32(a.Ack),                     // uint32
-		a.Routing.GetString(),                   // *GRERouting
+		a.Routing.getString(),                   // *GRERouting
 		a.Context.SrcIP,
 		a.Context.DstIP,
 		a.Context.SrcPort,
@@ -79,35 +82,37 @@ func (a GRE) CSVRecord() []string {
 	})
 }
 
-func (a GRE) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *GRE) Time() string {
 	return a.Timestamp
 }
 
-func (r *GRERouting) GetString() string {
-
+func (r *GRERouting) getString() string {
 	if r == nil {
 		return ""
 	}
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.AddressFamily))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.SREOffset))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.SRELength))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(r.RoutingInformation))
-	b.WriteString(Separator)
-	b.WriteString(r.Next.GetString())
-	b.WriteString(End)
+	b.WriteString(FieldSeparator)
+	b.WriteString(r.Next.getString())
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (a GRE) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *GRE) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var greMetric = prometheus.NewCounterVec(
@@ -118,26 +123,26 @@ var greMetric = prometheus.NewCounterVec(
 	fieldsGRE[1:],
 )
 
-func init() {
-	prometheus.MustRegister(greMetric)
-}
-
-func (a GRE) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *GRE) Inc() {
 	greMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *GRE) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a GRE) Src() string {
+// Src returns the source address of the audit record.
+func (a *GRE) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a GRE) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *GRE) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

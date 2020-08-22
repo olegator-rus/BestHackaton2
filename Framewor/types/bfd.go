@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -45,60 +46,68 @@ var fieldsBFD = []string{
 	"DstPort",
 }
 
-func (a BFD) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (b *BFD) CSVHeader() []string {
 	return filter(fieldsBFD)
 }
 
-func (a BFD) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (b *BFD) CSVRecord() []string {
 	// prevent accessing nil pointer
-	if a.Context == nil {
-		a.Context = &PacketContext{}
+	if b.Context == nil {
+		b.Context = &PacketContext{}
 	}
+
 	return filter([]string{
-		formatTimestamp(a.Timestamp),
-		formatInt32(a.Version),                        // int32
-		formatInt32(a.Diagnostic),                     // int32
-		formatInt32(a.State),                          // int32
-		strconv.FormatBool(a.Poll),                    // bool
-		strconv.FormatBool(a.Final),                   // bool
-		strconv.FormatBool(a.ControlPlaneIndependent), // bool
-		strconv.FormatBool(a.AuthPresent),             // bool
-		strconv.FormatBool(a.Demand),                  // bool
-		strconv.FormatBool(a.Multipoint),              // bool
-		formatInt32(a.DetectMultiplier),               // int32
-		formatInt32(a.MyDiscriminator),                // int32
-		formatInt32(a.YourDiscriminator),              // int32
-		formatInt32(a.DesiredMinTxInterval),           // int32
-		formatInt32(a.RequiredMinRxInterval),          // int32
-		formatInt32(a.RequiredMinEchoRxInterval),      // int32
-		a.AuthHeader.GetString(),                      // *BFDAuthHeader
-		a.Context.SrcIP,
-		a.Context.DstIP,
-		a.Context.SrcPort,
-		a.Context.DstPort,
+		formatTimestamp(b.Timestamp),
+		formatInt32(b.Version),                        // int32
+		formatInt32(b.Diagnostic),                     // int32
+		formatInt32(b.State),                          // int32
+		strconv.FormatBool(b.Poll),                    // bool
+		strconv.FormatBool(b.Final),                   // bool
+		strconv.FormatBool(b.ControlPlaneIndependent), // bool
+		strconv.FormatBool(b.AuthPresent),             // bool
+		strconv.FormatBool(b.Demand),                  // bool
+		strconv.FormatBool(b.Multipoint),              // bool
+		formatInt32(b.DetectMultiplier),               // int32
+		formatInt32(b.MyDiscriminator),                // int32
+		formatInt32(b.YourDiscriminator),              // int32
+		formatInt32(b.DesiredMinTxInterval),           // int32
+		formatInt32(b.RequiredMinRxInterval),          // int32
+		formatInt32(b.RequiredMinEchoRxInterval),      // int32
+		b.AuthHeader.getString(),                      // *BFDAuthHeader
+		b.Context.SrcIP,
+		b.Context.DstIP,
+		b.Context.SrcPort,
+		b.Context.DstPort,
 	})
 }
 
-func (a BFD) Time() string {
-	return a.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (b *BFD) Time() string {
+	return b.Timestamp
 }
 
-func (a BFDAuthHeader) GetString() string {
+func (bah BFDAuthHeader) getString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
-	b.WriteString(formatInt32(int32(a.AuthType)))
-	b.WriteString(Separator)
-	b.WriteString(formatInt32(int32(a.KeyID)))
-	b.WriteString(Separator)
-	b.WriteString(formatInt32(int32(a.SequenceNumber)))
-	b.WriteString(Separator)
-	b.WriteString(hex.EncodeToString(a.Data))
-	b.WriteString(End)
+
+	b.WriteString(StructureBegin)
+	b.WriteString(formatInt32(bah.AuthType))
+	b.WriteString(FieldSeparator)
+	b.WriteString(formatInt32(bah.KeyID))
+	b.WriteString(FieldSeparator)
+	b.WriteString(formatInt32(bah.SequenceNumber))
+	b.WriteString(FieldSeparator)
+	b.WriteString(hex.EncodeToString(bah.Data))
+	b.WriteString(StructureEnd)
+
 	return b.String()
 }
 
-func (a BFD) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (b *BFD) JSON() (string, error) {
+	b.Timestamp = utils.TimeToUnixMilli(b.Timestamp)
+	return jsonMarshaler.MarshalToString(b)
 }
 
 var bfdMetric = prometheus.NewCounterVec(
@@ -109,28 +118,30 @@ var bfdMetric = prometheus.NewCounterVec(
 	fieldsBFD[1:],
 )
 
-func init() {
-	prometheus.MustRegister(bfdMetric)
+// Inc increments the metrics for the audit record.
+func (b *BFD) Inc() {
+	bfdMetric.WithLabelValues(b.CSVRecord()[1:]...).Inc()
 }
 
-func (a BFD) Inc() {
-	bfdMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (b *BFD) SetPacketContext(ctx *PacketContext) {
+	b.Context = ctx
 }
 
-func (a *BFD) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a BFD) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (b *BFD) Src() string {
+	if b.Context != nil {
+		return b.Context.SrcIP
 	}
+
 	return ""
 }
 
-func (a BFD) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (b *BFD) Dst() string {
+	if b.Context != nil {
+		return b.Context.DstIP
 	}
+
 	return ""
 }

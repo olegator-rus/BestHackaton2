@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-// Provides primitives for instrumentation via prometheus
+// Package metrics provides primitives for instrumentation via prometheus
 package metrics
 
 import (
@@ -21,18 +21,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dreadl0ck/netcap/collector"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/dreadl0ck/netcap/collector"
 )
 
 const metricsRoute = "/metrics"
 
 var (
-	// Start time
+	// Start time.
 	startTime = time.Now()
 
-	// Uptime
+	// Uptime.
 	upTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nc_uptime",
@@ -40,7 +41,7 @@ var (
 		},
 		[]string{},
 	)
-	// NumPackets
+	// NumPackets.
 	numPackets = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "nc_numpackets",
@@ -50,13 +51,10 @@ var (
 	)
 )
 
-func init() {
+// ServeMetricsAt exposes the prometheus at the given address.
+func ServeMetricsAt(addr string, c *collector.Collector) {
 	prometheus.MustRegister(upTime)
 	prometheus.MustRegister(numPackets)
-}
-
-// ServeMetricsAt exposes the prometheus at the given address
-func ServeMetricsAt(addr string, c *collector.Collector) {
 
 	fmt.Println("starting to serve metrics at:", addr+metricsRoute)
 
@@ -65,7 +63,6 @@ func ServeMetricsAt(addr string, c *collector.Collector) {
 
 		// serve prometheus metrics on the /metrics route
 		http.HandleFunc(metricsRoute, func(w http.ResponseWriter, r *http.Request) {
-
 			upTime.WithLabelValues().Set(math.RoundToEven(time.Since(startTime).Seconds()))
 
 			if c != nil {

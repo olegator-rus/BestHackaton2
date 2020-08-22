@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,8 @@ package types
 import (
 	"encoding/hex"
 	"strings"
+
+	"github.com/dreadl0ck/netcap/utils"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -33,11 +35,13 @@ var fieldsARP = []string{
 	"DstProtAddress",  // []byte
 }
 
-func (a ARP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *ARP) CSVHeader() []string {
 	return filter(fieldsARP)
 }
 
-func (a ARP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *ARP) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(a.Timestamp),
 		formatInt32(a.AddrType),              // int32
@@ -52,12 +56,15 @@ func (a ARP) CSVRecord() []string {
 	})
 }
 
-func (a ARP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *ARP) Time() string {
 	return a.Timestamp
 }
 
-func (a ARP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *ARP) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var arpMetric = prometheus.NewCounterVec(
@@ -68,22 +75,22 @@ var arpMetric = prometheus.NewCounterVec(
 	fieldsARP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(arpMetric)
-}
-
-func (a ARP) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *ARP) Inc() {
 	arpMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a *ARP) SetPacketContext(ctx *PacketContext) {}
+// SetPacketContext sets the associated packet context for the audit record.
+func (a *ARP) SetPacketContext(*PacketContext) {}
 
-// TODO: preserve source and destination mac adresses for ARP and return them here
-func (a ARP) Src() string {
+// Src TODO: preserve source and destination mac adresses for ARP and return them here.
+// Src returns the source address of the audit record.
+func (a *ARP) Src() string {
 	return ""
 }
 
-// TODO: preserve source and destination mac adresses for ARP and return them here
-func (a ARP) Dst() string {
+// Dst TODO: preserve source and destination mac adresses for ARP and return them here.
+// Dst returns the destination address of the audit record.
+func (a *ARP) Dst() string {
 	return ""
 }

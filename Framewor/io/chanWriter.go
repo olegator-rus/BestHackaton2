@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -13,26 +13,31 @@
 
 package io
 
-// chanWriter writes into a []byte chan
-type ChanWriter struct {
+// ChanProtoWriter writes into a []byte chan.
+type ChanProtoWriter struct {
 	ch chan []byte
 }
 
-// TODO make chan buf size configurable
-func NewChanWriter() *ChanWriter {
-	return &ChanWriter{make(chan []byte, 1024)}
+// NewChanProtoWriter returns a new channel proto writer instance.
+func NewChanProtoWriter(size int) *ChanProtoWriter {
+	return &ChanProtoWriter{make(chan []byte, size)}
 }
 
-func (w *ChanWriter) Chan() <-chan []byte {
+// Chan returns the byte channel used to receive data.
+func (w *ChanProtoWriter) Chan() <-chan []byte {
 	return w.ch
 }
 
-func (w *ChanWriter) Write(p []byte) (int, error) {
+// WriteRecord writes a protocol buffer into the channel writer.
+func (w *ChanProtoWriter) Write(p []byte) (int, error) {
 	w.ch <- p
+
 	return len(p), nil
 }
 
-func (w *ChanWriter) Close() error {
+// Close will close the channel writer.
+func (w *ChanProtoWriter) Close() error {
 	close(w.ch)
+
 	return nil
 }

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -39,11 +40,13 @@ var fieldsFlow = []string{
 	"TimestampLast",
 }
 
-func (f Flow) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (f *Flow) CSVHeader() []string {
 	return filter(fieldsFlow)
 }
 
-func (f Flow) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (f *Flow) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(f.TimestampFirst),
 		f.LinkProto,
@@ -65,12 +68,17 @@ func (f Flow) CSVRecord() []string {
 	})
 }
 
-func (f Flow) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (f *Flow) Time() string {
 	return f.TimestampFirst
 }
 
-func (a Flow) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (f *Flow) JSON() (string, error) {
+	f.TimestampFirst = utils.TimeToUnixMilli(f.TimestampFirst)
+	f.TimestampLast = utils.TimeToUnixMilli(f.TimestampLast)
+
+	return jsonMarshaler.MarshalToString(f)
 }
 
 var (
@@ -128,7 +136,7 @@ var fieldsFlowMetrics = []string{
 	"DstPort",
 }
 
-func (f Flow) metricValues() []string {
+func (f *Flow) metricValues() []string {
 	return []string{
 		f.LinkProto,
 		f.NetworkProto,
@@ -143,28 +151,24 @@ func (f Flow) metricValues() []string {
 	}
 }
 
-func init() {
-	prometheus.MustRegister(flowMetric)
-	prometheus.MustRegister(flowTotalSize)
-	prometheus.MustRegister(flowAppPayloadSize)
-	prometheus.MustRegister(flowNumPackets)
-	prometheus.MustRegister(flowDuration)
+// Inc increments the metrics for the audit record.
+func (f *Flow) Inc() {
+	flowMetric.WithLabelValues(f.metricValues()...).Inc()
+	flowTotalSize.WithLabelValues(f.SrcMAC, f.DstMAC).Observe(float64(f.TotalSize))
+	flowAppPayloadSize.WithLabelValues(f.SrcMAC, f.DstMAC).Observe(float64(f.AppPayloadSize))
+	flowNumPackets.WithLabelValues(f.SrcMAC, f.DstMAC).Observe(float64(f.NumPackets))
+	flowDuration.WithLabelValues(f.SrcMAC, f.DstMAC).Observe(float64(f.Duration))
 }
 
-func (a Flow) Inc() {
-	flowMetric.WithLabelValues(a.metricValues()...).Inc()
-	flowTotalSize.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.TotalSize))
-	flowAppPayloadSize.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.AppPayloadSize))
-	flowNumPackets.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.NumPackets))
-	flowDuration.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.Duration))
+// SetPacketContext sets the associated packet context for the audit record.
+func (f *Flow) SetPacketContext(_ *PacketContext) {}
+
+// Src returns the source address of the audit record.
+func (f *Flow) Src() string {
+	return f.SrcIP
 }
 
-func (a Flow) SetPacketContext(ctx *PacketContext) {}
-
-func (a Flow) Src() string {
-	return a.SrcIP
-}
-
-func (a Flow) Dst() string {
-	return a.DstIP
+// Dst returns the destination address of the audit record.
+func (f *Flow) Dst() string {
+	return f.DstIP
 }

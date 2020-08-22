@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -14,18 +14,24 @@
 package netcap
 
 import (
+	"errors"
 	"io"
 
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dreadl0ck/netcap/types"
-	proto "github.com/golang/protobuf/proto"
+	"github.com/dreadl0ck/netcap/utils"
 )
 
 // InitRecord initializes a new record of the given type
 // that conforms to the proto.Message interface
-// if netcap is extended with new audit records they need to be added here as well
+// if netcap is extended with new audit records they need to be added here as well.
 func InitRecord(typ types.Type) (record proto.Message) {
-
 	switch typ {
+	case types.Type_NC_Ethernet:
+		record = new(types.Ethernet)
+	case types.Type_NC_ARP:
+		record = new(types.ARP)
 	case types.Type_NC_IPv4:
 		record = new(types.IPv4)
 	case types.Type_NC_IPv6:
@@ -48,10 +54,6 @@ func InitRecord(typ types.Type) (record proto.Message) {
 		record = new(types.ICMPv6)
 	case types.Type_NC_ICMPv6Echo:
 		record = new(types.ICMPv6Echo)
-	case types.Type_NC_ARP:
-		record = new(types.ARP)
-	case types.Type_NC_Ethernet:
-		record = new(types.Ethernet)
 	case types.Type_NC_SIP:
 		record = new(types.SIP)
 	case types.Type_NC_LLC:
@@ -94,12 +96,6 @@ func InitRecord(typ types.Type) (record proto.Message) {
 		record = new(types.Connection)
 	case types.Type_NC_Flow:
 		record = new(types.Flow)
-	case types.Type_NC_LinkFlow:
-		record = new(types.LinkFlow)
-	case types.Type_NC_NetworkFlow:
-		record = new(types.NetworkFlow)
-	case types.Type_NC_TransportFlow:
-		record = new(types.TransportFlow)
 	case types.Type_NC_IPSecAH:
 		record = new(types.IPSecAH)
 	case types.Type_NC_IPSecESP:
@@ -146,35 +142,73 @@ func InitRecord(typ types.Type) (record proto.Message) {
 		record = new(types.CIP)
 	case types.Type_NC_ENIP:
 		record = new(types.ENIP)
+	case types.Type_NC_DeviceProfile:
+		record = new(types.DeviceProfile)
+	case types.Type_NC_File:
+		record = new(types.File)
+	case types.Type_NC_SMTP:
+		record = new(types.SMTP)
+	case types.Type_NC_Diameter:
+		record = new(types.Diameter)
+	case types.Type_NC_POP3:
+		record = new(types.POP3)
+	case types.Type_NC_TLSServerHello:
+		record = new(types.TLSServerHello)
+	case types.Type_NC_Software:
+		record = new(types.Software)
+	case types.Type_NC_Service:
+		record = new(types.Service)
+	case types.Type_NC_Credentials:
+		record = new(types.Credentials)
+	case types.Type_NC_SSH:
+		record = new(types.SSH)
+	case types.Type_NC_Vulnerability:
+		record = new(types.Vulnerability)
+	case types.Type_NC_Exploit:
+		record = new(types.Exploit)
 	default:
 		panic("InitRecord: unknown type: " + typ.String())
 	}
+
 	return record
 }
 
 // Count returns the total number of records found in an audit record file
-func Count(filename string) (count int64) {
-
+// it does not return an error in case of a regular EOF
+// but will return an error in case of an unexpected EOF.
+func Count(filename string) (count int64, err error) {
 	// open audit record file
 	r, err := Open(filename, DefaultBufferSize)
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
-	defer r.Close()
+
+	defer func() {
+		errClose := r.Close()
+		if errClose != nil {
+			utils.DebugLog.Println("failed to close file:", errClose)
+		}
+	}()
 
 	var (
-		header = r.ReadHeader()
-		rec    = InitRecord(header.Type)
+		header, errFileHeader = r.ReadHeader()
+		rec                   = InitRecord(header.Type)
 	)
+
+	if errFileHeader != nil {
+		return 0, errFileHeader
+	}
+
 	for {
 		// read next record
-		err := r.Next(rec)
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		err = r.Next(rec)
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			panic(err)
+			return count, err
 		}
 		count++
 	}
-	return
+
+	return count, nil
 }

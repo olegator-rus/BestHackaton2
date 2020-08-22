@@ -1,0 +1,10 @@
+<MaltegoEntity id="netcap.IPv4" displayName="IPv4" displayNamePlural="IPv4" description="Internet Protocol version 4 is the fourth version of the Internet Protocol. It is one of the core protocols of standards-based internetworking methods in the Internet and other packet-switched networks" category="Netcap" smallIconResource="Netcap/IPv4" largeIconResource="Netcap/IPv4" allowedRoot="true" conversionOrder="2147483647" visible="true">
+ <Properties value="properties.ipv4" displayValue="properties.ipv4">
+  <Groups></Groups>
+  <Fields>
+   <Field name="properties.ipv4" type="string" nullable="true" hidden="false" readonly="false" description="" displayName="IPv4">
+    <SampleValue>-</SampleValue>
+   </Field>
+  </Fields>
+ </Properties>
+</MaltegoEntity>

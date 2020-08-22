@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -39,14 +40,16 @@ var fieldsIGMP = []string{
 	"DstIP",
 }
 
-func (i IGMP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (i *IGMP) CSVHeader() []string {
 	return filter(fieldsIGMP)
 }
 
-func (i IGMP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (i *IGMP) CSVRecord() []string {
 	var records []string
 	for _, r := range i.GroupRecords {
-		records = append(records, r.ToString())
+		records = append(records, r.toString())
 	}
 	// prevent accessing nil pointer
 	if i.Context == nil {
@@ -71,30 +74,32 @@ func (i IGMP) CSVRecord() []string {
 	})
 }
 
-func (i IGMP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (i *IGMP) Time() string {
 	return i.Timestamp
 }
 
-func (i IGMPv3GroupRecord) ToString() string {
-
+func (i IGMPv3GroupRecord) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(i.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(i.AuxDataLen))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(i.NumberOfSources))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(i.MulticastAddress)
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(i.SourceAddresses...))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (a IGMP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (i *IGMP) JSON() (string, error) {
+	i.Timestamp = utils.TimeToUnixMilli(i.Timestamp)
+	return jsonMarshaler.MarshalToString(i)
 }
 
 var igmpMetric = prometheus.NewCounterVec(
@@ -105,28 +110,28 @@ var igmpMetric = prometheus.NewCounterVec(
 	fieldsIGMP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(igmpMetric)
+// Inc increments the metrics for the audit record.
+func (i *IGMP) Inc() {
+	igmpMetric.WithLabelValues(i.CSVRecord()[1:]...).Inc()
 }
 
-func (a IGMP) Inc() {
-	igmpMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (i *IGMP) SetPacketContext(ctx *PacketContext) {
+	i.Context = ctx
 }
 
-func (a *IGMP) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a IGMP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (i *IGMP) Src() string {
+	if i.Context != nil {
+		return i.Context.SrcIP
 	}
 	return ""
 }
 
-func (a IGMP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (i *IGMP) Dst() string {
+	if i.Context != nil {
+		return i.Context.DstIP
 	}
 	return ""
 }

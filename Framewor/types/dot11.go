@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -37,11 +38,13 @@ var fieldsDot11 = []string{
 	"HTControl",      // *Dot11HTControl
 }
 
-func (d Dot11) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (d *Dot11) CSVHeader() []string {
 	return filter(fieldsDot11)
 }
 
-func (d Dot11) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (d *Dot11) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(d.Timestamp),
 		formatInt32(d.Type),           // int32
@@ -55,131 +58,134 @@ func (d Dot11) CSVRecord() []string {
 		formatInt32(d.SequenceNumber), // int32
 		formatInt32(d.FragmentNumber), // int32
 		formatUint32(d.Checksum),      // uint32
-		d.QOS.ToString(),              // *Dot11QOS
-		d.HTControl.ToString(),        // *Dot11HTControl
+		d.QOS.toString(),              // *Dot11QOS
+		d.HTControl.toString(),        // *Dot11HTControl
 	})
 }
 
-func (d Dot11) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (d *Dot11) Time() string {
 	return d.Timestamp
 }
 
-func (d Dot11QOS) ToString() string {
+func (d Dot11QOS) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(d.TID))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.EOSP))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.AckPolicy))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.TXOP))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d Dot11HTControl) ToString() string {
+func (d Dot11HTControl) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(strconv.FormatBool(d.ACConstraint))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.RDGMorePPDU))
-	b.WriteString(Separator)
-	b.WriteString(d.VHT.ToString())
-	b.WriteString(Separator)
-	b.WriteString(d.HT.ToString())
-	b.WriteString(End)
+	b.WriteString(FieldSeparator)
+	b.WriteString(d.VHT.toString())
+	b.WriteString(FieldSeparator)
+	b.WriteString(d.HT.toString())
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d *Dot11HTControlVHT) ToString() string {
+func (d *Dot11HTControlVHT) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(strconv.FormatBool(d.MRQ))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.UnsolicitedMFB))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.MSI))
-	b.WriteString(Separator)
-	b.WriteString(d.MFB.ToString())
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
+	b.WriteString(d.MFB.toString())
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.CompressedMSI))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.STBCIndication))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.MFSI))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.GID))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.CodingType))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.FbTXBeamformed))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d *Dot11HTControlMFB) ToString() string {
+func (d *Dot11HTControlMFB) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(d.NumSTS))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.VHTMCS))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.BW))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.SNR))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d *Dot11HTControlHT) ToString() string {
+func (d *Dot11HTControlHT) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
-	b.WriteString(d.LinkAdapationControl.ToString())
-	b.WriteString(Separator)
+	b.WriteString(StructureBegin)
+	b.WriteString(d.LinkAdapationControl.toString())
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.CalibrationPosition))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.CalibrationSequence))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.CSISteering))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.NDPAnnouncement))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.DEI))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d *Dot11LinkAdapationControl) ToString() string {
+func (d *Dot11LinkAdapationControl) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(strconv.FormatBool(d.TRQ))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(strconv.FormatBool(d.MRQ))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.MSI))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.MFSI))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.MFB))
-	b.WriteString(Separator)
-	b.WriteString(d.ASEL.ToString())
-	b.WriteString(End)
+	b.WriteString(FieldSeparator)
+	b.WriteString(d.ASEL.toString())
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (d *Dot11ASEL) ToString() string {
+func (d *Dot11ASEL) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(d.Command))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(d.Data))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (a Dot11) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (d *Dot11) JSON() (string, error) {
+	d.Timestamp = utils.TimeToUnixMilli(d.Timestamp)
+	return jsonMarshaler.MarshalToString(d)
 }
 
 var dot11Metric = prometheus.NewCounterVec(
@@ -190,21 +196,21 @@ var dot11Metric = prometheus.NewCounterVec(
 	fieldsDot11[1:],
 )
 
-func init() {
-	prometheus.MustRegister(dot11Metric)
+// Inc increments the metrics for the audit record.
+func (d *Dot11) Inc() {
+	dot11Metric.WithLabelValues(d.CSVRecord()[1:]...).Inc()
 }
 
-func (a Dot11) Inc() {
-	dot11Metric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (d *Dot11) SetPacketContext(*PacketContext) {}
 
-func (a *Dot11) SetPacketContext(ctx *PacketContext) {}
-
-// TODO: return Mac addr
-func (a Dot11) Src() string {
+// Src TODO: return Mac addr.
+// Src returns the source address of the audit record.
+func (d *Dot11) Src() string {
 	return ""
 }
 
-func (a Dot11) Dst() string {
+// Dst returns the destination address of the audit record.
+func (d *Dot11) Dst() string {
 	return ""
 }

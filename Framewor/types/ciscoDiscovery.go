@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,8 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -28,43 +30,51 @@ var fieldsCiscoDiscovery = []string{
 	"Values",   // []*CiscoDiscoveryValue
 }
 
-func (a CiscoDiscovery) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (cd *CiscoDiscovery) CSVHeader() []string {
 	return filter(fieldsCiscoDiscovery)
 }
 
-func (a CiscoDiscovery) CSVRecord() []string {
-	var vals []string
-	for _, v := range a.Values {
-		vals = append(vals, v.ToString())
+// CSVRecord returns the CSV record for the audit record.
+func (cd *CiscoDiscovery) CSVRecord() []string {
+	values := make([]string, len(cd.Values))
+
+	for i, v := range cd.Values {
+		values[i] = v.toString()
 	}
+
 	return filter([]string{
-		formatTimestamp(a.Timestamp),
-		formatInt32(a.Version),  // int32
-		formatInt32(a.TTL),      // int32
-		formatInt32(a.Checksum), // int32
-		join(vals...),           // []*CiscoDiscoveryValue
+		formatTimestamp(cd.Timestamp),
+		formatInt32(cd.Version),  // int32
+		formatInt32(cd.TTL),      // int32
+		formatInt32(cd.Checksum), // int32
+		join(values...),          // []*CiscoDiscoveryValue
 	})
 }
 
-func (a CiscoDiscovery) Time() string {
-	return a.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (cd *CiscoDiscovery) Time() string {
+	return cd.Timestamp
 }
 
-func (v CiscoDiscoveryValue) ToString() string {
-
+func (v CiscoDiscoveryValue) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(v.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(v.Length))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(v.Value))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
+
 	return b.String()
 }
 
-func (a CiscoDiscovery) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (cd *CiscoDiscovery) JSON() (string, error) {
+	cd.Timestamp = utils.TimeToUnixMilli(cd.Timestamp)
+	return jsonMarshaler.MarshalToString(cd)
 }
 
 var ciscoDiscoveryMetric = prometheus.NewCounterVec(
@@ -75,21 +85,21 @@ var ciscoDiscoveryMetric = prometheus.NewCounterVec(
 	fieldsCiscoDiscovery[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ciscoDiscoveryMetric)
+// Inc increments the metrics for the audit record.
+func (cd *CiscoDiscovery) Inc() {
+	ciscoDiscoveryMetric.WithLabelValues(cd.CSVRecord()[1:]...).Inc()
 }
 
-func (a CiscoDiscovery) Inc() {
-	ciscoDiscoveryMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (cd *CiscoDiscovery) SetPacketContext(*PacketContext) {}
 
-func (a *CiscoDiscovery) SetPacketContext(ctx *PacketContext) {}
-
-// TODO
-func (a CiscoDiscovery) Src() string {
+// Src TODO.
+// Src returns the source address of the audit record.
+func (cd *CiscoDiscovery) Src() string {
 	return ""
 }
 
-func (a CiscoDiscovery) Dst() string {
+// Dst returns the destination address of the audit record.
+func (cd *CiscoDiscovery) Dst() string {
 	return ""
 }

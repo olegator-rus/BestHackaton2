@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -38,20 +39,22 @@ var fieldsOSPFv3 = []string{
 	"DstIP",
 }
 
-func (a OSPFv3) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *OSPFv3) CSVHeader() []string {
 	return filter(fieldsOSPFv3)
 }
 
-func (a OSPFv3) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *OSPFv3) CSVRecord() []string {
 	var (
 		lsas   []string
 		lsreqs []string
 	)
 	for _, l := range a.LSAs {
-		lsas = append(lsas, l.ToString())
+		lsas = append(lsas, l.toString())
 	}
 	for _, l := range a.LSR {
-		lsreqs = append(lsreqs, l.ToString())
+		lsreqs = append(lsreqs, l.toString())
 	}
 	// prevent accessing nil pointer
 	if a.Context == nil {
@@ -77,37 +80,33 @@ func (a OSPFv3) CSVRecord() []string {
 	})
 }
 
-func (a OSPFv3) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *OSPFv3) Time() string {
 	return a.Timestamp
 }
 
-func (l HelloPkg) ToString() string {
-
+func (l HelloPkg) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(l.InterfaceID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.RtrPriority)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.Options)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.HelloInterval)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.RouterDeadInterval)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.DesignatedRouterID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.BackupDesignatedRouterID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(joinUints(l.NeighborID)) // []uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
-}
-
-func (u HelloPkg) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
 }
 
 var ospf3Metric = prometheus.NewCounterVec(
@@ -118,30 +117,32 @@ var ospf3Metric = prometheus.NewCounterVec(
 	fieldsOSPFv3[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ospf3Metric)
-}
-
-func (a OSPFv3) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *OSPFv3) Inc() {
 	ospf3Metric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a OSPFv3) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *OSPFv3) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *OSPFv3) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a OSPFv3) Src() string {
+// Src returns the source address of the audit record.
+func (a *OSPFv3) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a OSPFv3) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *OSPFv3) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

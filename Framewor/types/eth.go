@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -28,26 +29,32 @@ var fieldsEthernet = []string{
 	"PayloadSize",    // int32
 }
 
-func (e Ethernet) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (eth *Ethernet) CSVHeader() []string {
 	return filter(fieldsEthernet)
 }
-func (e Ethernet) CSVRecord() []string {
+
+// CSVRecord returns the CSV record for the audit record.
+func (eth *Ethernet) CSVRecord() []string {
 	return filter([]string{
-		formatTimestamp(e.Timestamp),
-		e.SrcMAC,                        // string
-		e.DstMAC,                        // string
-		formatInt32(e.EthernetType),     // int32
-		formatFloat64(e.PayloadEntropy), // float64
-		formatInt32(e.PayloadSize),      // int32
+		formatTimestamp(eth.Timestamp),
+		eth.SrcMAC,                        // string
+		eth.DstMAC,                        // string
+		formatInt32(eth.EthernetType),     // int32
+		formatFloat64(eth.PayloadEntropy), // float64
+		formatInt32(eth.PayloadSize),      // int32
 	})
 }
 
-func (e Ethernet) Time() string {
-	return e.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (eth *Ethernet) Time() string {
+	return eth.Timestamp
 }
 
-func (a Ethernet) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (eth *Ethernet) JSON() (string, error) {
+	eth.Timestamp = utils.TimeToUnixMilli(eth.Timestamp)
+	return jsonMarshaler.MarshalToString(eth)
 }
 
 var (
@@ -84,32 +91,30 @@ var fieldsEthernetMetrics = []string{
 	"EthernetType", // int32
 }
 
-func (e Ethernet) metricValues() []string {
+func (eth *Ethernet) metricValues() []string {
 	return []string{
-		e.SrcMAC,                    // string
-		e.DstMAC,                    // string
-		formatInt32(e.EthernetType), // int32
+		eth.SrcMAC,                    // string
+		eth.DstMAC,                    // string
+		formatInt32(eth.EthernetType), // int32
 	}
 }
 
-func init() {
-	prometheus.MustRegister(ethernetMetric)
-	prometheus.MustRegister(ethernetPayloadEntropy)
-	prometheus.MustRegister(ethernetPayloadSize)
+// Inc increments the metrics for the audit record.
+func (eth *Ethernet) Inc() {
+	ethernetMetric.WithLabelValues(eth.metricValues()...).Inc()
+	ethernetPayloadEntropy.WithLabelValues().Observe(eth.PayloadEntropy)
+	ethernetPayloadSize.WithLabelValues().Observe(float64(eth.PayloadSize))
 }
 
-func (a Ethernet) Inc() {
-	ethernetMetric.WithLabelValues(a.metricValues()...).Inc()
-	ethernetPayloadEntropy.WithLabelValues().Observe(a.PayloadEntropy)
-	ethernetPayloadSize.WithLabelValues().Observe(float64(a.PayloadSize))
+// SetPacketContext sets the associated packet context for the audit record.
+func (eth *Ethernet) SetPacketContext(*PacketContext) {}
+
+// Src returns the source address of the audit record.
+func (eth *Ethernet) Src() string {
+	return eth.SrcMAC
 }
 
-func (a *Ethernet) SetPacketContext(ctx *PacketContext) {}
-
-func (a Ethernet) Src() string {
-	return a.SrcMAC
-}
-
-func (a Ethernet) Dst() string {
-	return a.DstMAC
+// Dst returns the destination address of the audit record.
+func (eth *Ethernet) Dst() string {
+	return eth.DstMAC
 }

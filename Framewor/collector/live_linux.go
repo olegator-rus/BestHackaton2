@@ -2,7 +2,7 @@
 
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,8 +17,9 @@ package collector
 
 import (
 	"io"
+	"sync/atomic"
 
-	"github.com/dreadl0ck/netcap/encoder"
+	"github.com/dreadl0ck/gopacket"
 	"github.com/dreadl0ck/gopacket/pcapgo"
 	"github.com/pkg/errors"
 )
@@ -50,24 +51,49 @@ func (c *Collector) CollectLive(i string, bpf string) error {
 		return err
 	}
 
-	encoder.LiveMode = true
+	stopProgress := c.printProgressInterval()
+
+	c.mu.Lock()
+	c.isLive = true
+	c.mu.Unlock()
+
+	var (
+		data []byte
+		ci   gopacket.CaptureInfo
+	)
 
 	// read packets from channel
 	for {
 
 		// read next packet
-		data, ci, err := handle.ReadPacketData()
+		data, ci, err = handle.ZeroCopyReadPacketData()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
-			return errors.Wrap(err, "Error reading packet data")
+			return errors.Wrap(err, "error reading packet data")
 		}
+
+		// increment atomic packet counter
+		atomic.AddInt64(&c.current, 1)
+
+		// must be locked, otherwise a race occurs when sending a SIGINT
+		//  and triggering wg.Wait() in another goroutine...
+		c.statMutex.Lock()
+
+		// increment wait group for packet processing
+		c.wg.Add(1)
+
+		c.statMutex.Unlock()
 
 		c.handleRawPacketData(data, ci)
 	}
 
+	// stop progress reporting
+	stopProgress <- struct{}{}
+
 	// run cleanup on channel exit
-	c.cleanup()
+	c.cleanup(false)
+
 	return nil
 }

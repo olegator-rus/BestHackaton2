@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,53 +11,55 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package util
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os/exec"
 	"reflect"
 	"strings"
 
+	"github.com/mgutz/ansi"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
-	"github.com/mgutz/ansi"
 )
 
 func printHeader() {
 	netcap.PrintLogo()
 	fmt.Println()
-	fmt.Println("usage examples:")
-	fmt.Println("	$ net.util -r TCP.ncap.gz -check")
-	fmt.Println("	$ net.util -r TCP.ncap.gz -check -sep '/'")
-	fmt.Println("	$ net.util -ts2utc 1505839354.197231")
+	fmt.Println("util tool usage examples:")
+	fmt.Println("	$ net util -read TCP.ncap.gz -check")
+	fmt.Println("	$ net util -read TCP.ncap.gz -check -sep '/'")
+	fmt.Println("	$ net util -ts2utc 1505839354.197231")
 	fmt.Println()
 }
 
-// usage prints the use
+// usage prints the use.
 func printUsage() {
 	printHeader()
-	flag.PrintDefaults()
+	fs.PrintDefaults()
 }
 
 // CheckFields checks if the separator occurs inside fields of audit records
-// to prevent this breaking the generated CSV file
+// to prevent this breaking the generated CSV file.
 func checkFields() {
-
 	r, err := netcap.Open(*flagInput, *flagMemBufferSize)
 	if err != nil {
 		panic(err)
 	}
 
 	var (
-		h                 = r.ReadHeader()
+		h, errFileHeader  = r.ReadHeader()
 		record            = netcap.InitRecord(h.Type)
 		numExpectedFields int
 		checkFieldNames   = true
 		allFieldNames     []string
 	)
+	if errFileHeader != nil {
+		log.Fatal(errFileHeader)
+	}
 	if p, ok := record.(types.AuditRecord); ok {
 		numExpectedFields = len(p.CSVHeader())
 		allFieldNames = p.CSVHeader()
@@ -70,6 +72,7 @@ func checkFields() {
 		err = r.Next(record)
 		if err != nil {
 			fmt.Println(err)
+
 			break
 		}
 
@@ -89,11 +92,8 @@ func checkFields() {
 
 			// check if field count matches
 			if p, ok := record.(types.AuditRecord); ok {
-
 				// bail out and print error if field count does not match
-				if len(p.CSVRecord()) != numStructFields {
-
-					// print all struct fields
+				if len(p.CSVRecord()) != numStructFields { // print all struct fields
 					fmt.Println(h.Type.String() + " struct fields:")
 					for i := 0; i < numStructFields; i++ {
 						fmt.Println("- " + reflectedValue.Type().Field(i).Name)

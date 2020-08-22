@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -30,11 +31,13 @@ var fieldsMPLS = []string{
 	"DstIP",
 }
 
-func (a MPLS) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *MPLS) CSVHeader() []string {
 	return filter(fieldsMPLS)
 }
 
-func (a MPLS) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *MPLS) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -50,12 +53,15 @@ func (a MPLS) CSVRecord() []string {
 	})
 }
 
-func (a MPLS) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *MPLS) Time() string {
 	return a.Timestamp
 }
 
-func (a MPLS) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *MPLS) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var mplsMetric = prometheus.NewCounterVec(
@@ -66,26 +72,26 @@ var mplsMetric = prometheus.NewCounterVec(
 	fieldsMPLS[1:],
 )
 
-func init() {
-	prometheus.MustRegister(mplsMetric)
-}
-
-func (a MPLS) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *MPLS) Inc() {
 	mplsMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *MPLS) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a MPLS) Src() string {
+// Src returns the source address of the audit record.
+func (a *MPLS) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a MPLS) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *MPLS) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

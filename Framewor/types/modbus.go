@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -36,11 +37,13 @@ var fieldsModbus = []string{
 	"DstPort",
 }
 
-func (a Modbus) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *Modbus) CSVHeader() []string {
 	return filter(fieldsModbus)
 }
 
-func (a Modbus) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *Modbus) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -61,15 +64,18 @@ func (a Modbus) CSVRecord() []string {
 	})
 }
 
-func (a Modbus) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *Modbus) Time() string {
 	return a.Timestamp
 }
 
-func (a Modbus) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *Modbus) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
-var modbusTcpMetric = prometheus.NewCounterVec(
+var modbusTCPMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: strings.ToLower(Type_NC_Modbus.String()),
 		Help: Type_NC_Modbus.String() + " audit records",
@@ -77,26 +83,26 @@ var modbusTcpMetric = prometheus.NewCounterVec(
 	fieldsModbus[1:],
 )
 
-func init() {
-	prometheus.MustRegister(modbusTcpMetric)
+// Inc increments the metrics for the audit record.
+func (a *Modbus) Inc() {
+	modbusTCPMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a Modbus) Inc() {
-	modbusTcpMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
-
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *Modbus) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a Modbus) Src() string {
+// Src returns the source address of the audit record.
+func (a *Modbus) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a Modbus) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *Modbus) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

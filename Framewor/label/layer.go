@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -14,6 +14,7 @@
 package label
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -21,27 +22,31 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
-// CollectLabels indicates whether labels should be collected
+// CollectLabels indicates whether labels should be collected.
 var CollectLabels bool
 
-// Layer labels packets of a given gopacket.LayerType string.
-func Layer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*SuricataAlert, labels []*SuricataAlert, outDir, separator, selection string) *pb.ProgressBar {
+// labelLayer labels packets of a given gopacket.LayerType string.
+func labelLayer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*suricataAlert, labels []*suricataAlert, outDir, separator, selection string) *pb.ProgressBar {
 	var (
-		fname       = filepath.Join(outDir, file)
-		total       = netcap.Count(fname)
-		labelsTotal = 0
-		outFileName = filepath.Join(outDir, typ+"_labeled.csv")
-		progress    = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
+		fname           = filepath.Join(outDir, file)
+		total, errCount = netcap.Count(fname)
+		labelsTotal     = 0
+		outFileName     = filepath.Join(outDir, typ+"_labeled.csv")
+		progress        = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
 	)
 
-	go func() {
+	if errCount != nil {
+		log.Fatal("failed to count audit records:", errCount)
+	}
 
+	go func() {
 		// open layer data file
 		r, err := netcap.Open(fname, netcap.DefaultBufferSize)
 		if err != nil {
@@ -49,7 +54,10 @@ func Layer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*Sur
 		}
 
 		// read netcap header
-		header := r.ReadHeader()
+		header, errFileHeader := r.ReadHeader()
+		if errFileHeader != nil {
+			log.Fatal(errFileHeader)
+		}
 
 		// create outfile handle
 		f, err := os.Create(outFileName)
@@ -78,8 +86,8 @@ func Layer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*Sur
 		}
 
 		for {
-			err := r.Next(record)
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err = r.Next(record)
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				break
 			} else if err != nil {
 				panic(err)
@@ -96,13 +104,11 @@ func Layer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*Sur
 
 				var label string
 
-				// check if flow has a source or destination adress matching an alert
+				// check if flow has a source or destination address matching an alert
 				// if not label it as normal
 				for _, a := range labels {
-
 					// if the layer audit record has a timestamp of an alert
 					if a.Timestamp == p.Time() {
-
 						// only if it is not already part of the label
 						if !strings.Contains(label, a.Classification) {
 							if label == "" {
@@ -120,22 +126,22 @@ func Layer(wg *sync.WaitGroup, file string, typ string, labelMap map[string]*Sur
 					}
 
 					// add label
-					f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + label + "\n")
+					_, _ = f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + label + "\n")
 					labelsTotal++
 				} else {
 					// label as normal
-					f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + "normal\n")
+					_, _ = f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + "normal\n")
 				}
 			} else {
 				// layers are mapped by timestamp
 				// this preserves only the first label seen for each timestamp
-				if a, ok := labelMap[p.Time()]; ok {
+				if a, exists := labelMap[p.Time()]; exists {
 					// add label
-					f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + a.Classification + "\n")
+					_, _ = f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + a.Classification + "\n")
 					labelsTotal++
 				} else {
 					// label as normal
-					f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + "normal\n")
+					_, _ = f.WriteString(strings.Join(p.CSVRecord(), separator) + separator + "normal\n")
 				}
 			}
 		}

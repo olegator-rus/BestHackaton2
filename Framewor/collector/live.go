@@ -2,7 +2,7 @@
 
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,9 +17,10 @@ package collector
 
 import (
 	"io"
+	"sync/atomic"
 
+	"github.com/dreadl0ck/gopacket"
 	"github.com/dreadl0ck/gopacket/pcap"
-	"github.com/dreadl0ck/netcap/encoder"
 	"github.com/pkg/errors"
 )
 
@@ -27,11 +28,11 @@ import (
 // optionally a bpf can be supplied.
 // this is the darwin version that uses the pcap lib with c bindings to fetch packets
 // currently there is no other option to do that.
-func (c *Collector) CollectLive(i string, bpf string) error {
+func (c *Collector) CollectLive(iface, bpf string) error {
 	// open interface in live mode
 	// timeout is set to 0
-	// snaplen and promiscous mode can be configured over the collector instance
-	handle, err := pcap.OpenLive(i, int32(c.config.SnapLen), c.config.Promisc, 0)
+	// snaplen and promiscuous mode can be configured over the collector instance
+	handle, err := pcap.OpenLive(iface, int32(c.config.SnapLen), c.config.Promisc, 0)
 	if err != nil {
 		return err
 	}
@@ -40,34 +41,60 @@ func (c *Collector) CollectLive(i string, bpf string) error {
 
 	// set BPF if requested
 	if bpf != "" {
-		err := handle.SetBPFFilter(bpf)
+		err = handle.SetBPFFilter(bpf)
 		if err != nil {
 			return err
 		}
 	}
 
 	// initialize collector
-	if err := c.Init(); err != nil {
+	if err = c.Init(); err != nil {
 		return err
 	}
 
-	encoder.LiveMode = true
+	stopProgress := c.printProgressInterval()
+
+	c.mu.Lock()
+	c.isLive = true
+	c.mu.Unlock()
+
+	var (
+		data []byte
+		ci   gopacket.CaptureInfo
+	)
 
 	// read packets from channel
 	for {
 		// read next packet
-		data, ci, err := handle.ZeroCopyReadPacketData()
+		data, ci, err = handle.ZeroCopyReadPacketData()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
-			return errors.Wrap(err, "Error reading packet data")
+
+			return errors.Wrap(err, "error reading packet data")
 		}
+
+		// increment atomic packet counter
+		atomic.AddInt64(&c.current, 1)
+
+		// must be locked, otherwise a race occurs when sending a SIGINT
+		//  and triggering wg.Wait() in another goroutine...
+		c.statMutex.Lock()
+
+		// increment wait group for packet processing
+		c.wg.Add(1)
+
+		c.statMutex.Unlock()
 
 		c.handleRawPacketData(data, ci)
 	}
 
+	// stop progress reporting
+	stopProgress <- struct{}{}
+
 	// run cleanup on channel exit
-	c.cleanup()
+	c.cleanup(false)
+
 	return nil
 }

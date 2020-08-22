@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -15,60 +15,75 @@ package collector
 
 import (
 	"io"
-	"log"
+	"sync/atomic"
 
-	"github.com/dreadl0ck/netcap/encoder"
 	"github.com/dreadl0ck/gopacket"
-	"github.com/dreadl0ck/gopacket/layers"
 	"github.com/dreadl0ck/gopacket/pcap"
 	"github.com/pkg/errors"
 )
 
 // CollectBPF open the named PCAP file and sets the specified BPF filter.
-func (c *Collector) CollectBPF(path string, bpf string) error {
-
+func (c *Collector) CollectBPF(path, bpf string) error {
+	// open pcap file at path
 	handle, err := pcap.OpenOffline(path)
 	if err != nil {
 		return err
 	}
 	defer handle.Close()
 
-	if err = handle.SetBPFFilter(bpf); err != nil {
+	// set berkeley packet filter on handle
+	if err = handle.SetBPFFilter(bpf); err != nil { //nolint:gocritic
 		return err
 	}
 
-	if err = c.Init(); err != nil {
+	// initialize collector
+	if err = c.Init(); err != nil { //nolint:gocritic
 		return err
 	}
+
+	stopProgress := c.printProgressInterval()
+
+	c.mu.Lock()
+	c.isLive = true
+	c.mu.Unlock()
+
+	var (
+		data []byte
+		ci   gopacket.CaptureInfo
+	)
 
 	// read packets
-	log.Println("decoding packets... ")
 	for {
-
-		// fetch the next packetdata and packetheader
-		data, ci, err := handle.ZeroCopyReadPacketData()
+		// fetch the next packet data and packet header
+		data, ci, err = handle.ZeroCopyReadPacketData()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
-			return errors.Wrap(err, "Error reading packet data")
+
+			return errors.Wrap(err, "error reading packet data")
 		}
 
-		c.printProgress()
+		// increment atomic packet counter
+		atomic.AddInt64(&c.current, 1)
 
-		p := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Lazy)
-		p.Metadata().Timestamp = ci.Timestamp
-		p.Metadata().CaptureInfo = ci
+		// must be locked, otherwise a race occurs when sending a SIGINT
+		//  and triggering wg.Wait() in another goroutine...
+		c.statMutex.Lock()
 
-		// if HTTP capture is desired, tcp stream reassembly needs to be performed.
-		// the gopacket/reassembly implementation does not allow packets to arrive out of order
-		// therefore the http decoding must not happen in a worker thread
-		// and instead be performed here to guarantee packets are being processed sequentially
-		if encoder.HTTPActive {
-			encoder.DecodeHTTP(p)
-		}
-		c.handlePacket(p)
+		// increment wait group for packet processing
+		c.wg.Add(1)
+
+		c.statMutex.Unlock()
+
+		c.handleRawPacketData(data, ci)
 	}
-	c.cleanup()
+
+	// stop progress reporting
+	stopProgress <- struct{}{}
+
+	// run cleanup on channel exit
+	c.cleanup(false)
+
 	return nil
 }

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -44,11 +45,13 @@ var fieldsUSB = []string{
 	"Payload",
 }
 
-func (u USB) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (u *USB) CSVHeader() []string {
 	return filter(fieldsUSB)
 }
 
-func (u USB) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (u *USB) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(u.Timestamp), // string
 		formatUint64(u.ID),
@@ -73,12 +76,15 @@ func (u USB) CSVRecord() []string {
 	})
 }
 
-func (f USB) Time() string {
-	return f.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (u *USB) Time() string {
+	return u.Timestamp
 }
 
-func (f USB) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&f)
+// JSON returns the JSON representation of the audit record.
+func (u *USB) JSON() (string, error) {
+	u.Timestamp = utils.TimeToUnixMilli(u.Timestamp)
+	return jsonMarshaler.MarshalToString(u)
 }
 
 var usbMetric = prometheus.NewCounterVec(
@@ -89,22 +95,22 @@ var usbMetric = prometheus.NewCounterVec(
 	fieldsUSB[1:],
 )
 
-func init() {
-	prometheus.MustRegister(usbMetric)
+// Inc increments the metrics for the audit record.
+func (u *USB) Inc() {
+	usbMetric.WithLabelValues(u.CSVRecord()[1:]...).Inc()
 }
 
-func (a USB) Inc() {
-	usbMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (u *USB) SetPacketContext(*PacketContext) {}
 
-func (a *USB) SetPacketContext(ctx *PacketContext) {}
-
-// TODO return source DeviceAddress?
-func (a USB) Src() string {
+// Src TODO return source DeviceAddress?
+// Src returns the source address of the audit record.
+func (u *USB) Src() string {
 	return ""
 }
 
-// TODO return destination DeviceAddress?
-func (a USB) Dst() string {
+// Dst TODO return destination DeviceAddress?
+// Dst returns the destination address of the audit record.
+func (u *USB) Dst() string {
 	return ""
 }

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -30,11 +31,13 @@ var fieldsSCTP = []string{
 	"DstIP",
 }
 
-func (s SCTP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (s *SCTP) CSVHeader() []string {
 	return filter(fieldsSCTP)
 }
 
-func (s SCTP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (s *SCTP) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if s.Context == nil {
 		s.Context = &PacketContext{}
@@ -50,12 +53,15 @@ func (s SCTP) CSVRecord() []string {
 	})
 }
 
-func (s SCTP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (s *SCTP) Time() string {
 	return s.Timestamp
 }
 
-func (u SCTP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
+// JSON returns the JSON representation of the audit record.
+func (u *SCTP) JSON() (string, error) {
+	u.Timestamp = utils.TimeToUnixMilli(u.Timestamp)
+	return jsonMarshaler.MarshalToString(u)
 }
 
 var sctpMetric = prometheus.NewCounterVec(
@@ -66,34 +72,33 @@ var sctpMetric = prometheus.NewCounterVec(
 	fieldsSCTP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(sctpMetric)
+// Inc increments the metrics for the audit record.
+func (s *SCTP) Inc() {
+	sctpMetric.WithLabelValues(s.CSVRecord()[1:]...).Inc()
 }
 
-func (a SCTP) Inc() {
-	sctpMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
-
-func (a *SCTP) SetPacketContext(ctx *PacketContext) {
-
+// SetPacketContext sets the associated packet context for the audit record.
+func (s *SCTP) SetPacketContext(ctx *PacketContext) {
 	// create new context and only add information that is
 	// not yet present on the audit record type
-	a.Context = &PacketContext{
+	s.Context = &PacketContext{
 		SrcPort: ctx.SrcPort,
 		DstPort: ctx.DstPort,
 	}
 }
 
-func (a SCTP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (s *SCTP) Src() string {
+	if s.Context != nil {
+		return s.Context.SrcIP
 	}
 	return ""
 }
 
-func (a SCTP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (s *SCTP) Dst() string {
+	if s.Context != nil {
+		return s.Context.DstIP
 	}
 	return ""
 }

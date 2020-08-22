@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -39,11 +40,13 @@ var fieldsConnection = []string{
 	"TimestampLast",
 }
 
-func (c Connection) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (c *Connection) CSVHeader() []string {
 	return filter(fieldsConnection)
 }
 
-func (c Connection) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (c *Connection) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(c.TimestampFirst),
 		c.LinkProto,
@@ -65,12 +68,17 @@ func (c Connection) CSVRecord() []string {
 	})
 }
 
-func (c Connection) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (c *Connection) Time() string {
 	return c.TimestampFirst
 }
 
-func (a Connection) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (c *Connection) JSON() (string, error) {
+	c.TimestampFirst = utils.TimeToUnixMilli(c.TimestampFirst)
+	c.TimestampLast = utils.TimeToUnixMilli(c.TimestampLast)
+
+	return jsonMarshaler.MarshalToString(c)
 }
 
 var (
@@ -128,43 +136,39 @@ var fieldsConnectionMetrics = []string{
 	"DstPort",
 }
 
-func (f Connection) metricValues() []string {
+func (c *Connection) metricValues() []string {
 	return []string{
-		f.LinkProto,
-		f.NetworkProto,
-		f.TransportProto,
-		f.ApplicationProto,
-		f.SrcMAC,
-		f.DstMAC,
-		f.SrcIP,
-		f.SrcPort,
-		f.DstIP,
-		f.DstPort,
+		c.LinkProto,
+		c.NetworkProto,
+		c.TransportProto,
+		c.ApplicationProto,
+		c.SrcMAC,
+		c.DstMAC,
+		c.SrcIP,
+		c.SrcPort,
+		c.DstIP,
+		c.DstPort,
 	}
 }
 
-func init() {
-	prometheus.MustRegister(connectionsMetric)
-	prometheus.MustRegister(connTotalSize)
-	prometheus.MustRegister(connAppPayloadSize)
-	prometheus.MustRegister(connNumPackets)
-	prometheus.MustRegister(connDuration)
+// Inc increments the metrics for the audit record.
+func (c *Connection) Inc() {
+	connectionsMetric.WithLabelValues(c.metricValues()...).Inc()
+	connTotalSize.WithLabelValues(c.SrcMAC, c.DstMAC).Observe(float64(c.TotalSize))
+	connAppPayloadSize.WithLabelValues(c.SrcMAC, c.DstMAC).Observe(float64(c.AppPayloadSize))
+	connNumPackets.WithLabelValues(c.SrcMAC, c.DstMAC).Observe(float64(c.NumPackets))
+	connDuration.WithLabelValues(c.SrcMAC, c.DstMAC).Observe(float64(c.Duration))
 }
 
-func (a Connection) Inc() {
-	connectionsMetric.WithLabelValues(a.metricValues()...).Inc()
-	connTotalSize.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.TotalSize))
-	connAppPayloadSize.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.AppPayloadSize))
-	connNumPackets.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.NumPackets))
-	connDuration.WithLabelValues(a.SrcMAC, a.DstMAC).Observe(float64(a.Duration))
+// SetPacketContext sets the associated packet context for the audit record.
+func (c *Connection) SetPacketContext(*PacketContext) {}
+
+// Src returns the source address of the audit record.
+func (c *Connection) Src() string {
+	return c.SrcIP
 }
 
-func (a Connection) SetPacketContext(ctx *PacketContext) {}
-
-func (a Connection) Src() string {
-	return a.SrcIP
-}
-
-func (a Connection) Dst() string {
-	return a.DstIP
+// Dst returns the destination address of the audit record.
+func (c *Connection) Dst() string {
+	return c.DstIP
 }

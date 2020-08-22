@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -34,11 +35,13 @@ var fieldsUDP = []string{
 	"DstIP",
 }
 
-func (u UDP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (u *UDP) CSVHeader() []string {
 	return filter(fieldsUDP)
 }
 
-func (u UDP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (u *UDP) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if u.Context == nil {
 		u.Context = &PacketContext{}
@@ -57,12 +60,15 @@ func (u UDP) CSVRecord() []string {
 	})
 }
 
-func (u UDP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (u *UDP) Time() string {
 	return u.Timestamp
 }
 
-func (u UDP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
+// JSON returns the JSON representation of the audit record.
+func (u *UDP) JSON() (string, error) {
+	u.Timestamp = utils.TimeToUnixMilli(u.Timestamp)
+	return jsonMarshaler.MarshalToString(u)
 }
 
 var (
@@ -98,45 +104,42 @@ var fieldsUDPMetrics = []string{
 	"DstPort",
 }
 
-func (u UDP) metricValues() []string {
+func (u *UDP) metricValues() []string {
 	return []string{
 		formatInt32(u.SrcPort), // int32
 		formatInt32(u.DstPort), // int32
 	}
 }
 
-func init() {
-	prometheus.MustRegister(udpMetric)
-	prometheus.MustRegister(udpPayloadEntropy)
-	prometheus.MustRegister(udpPayloadSize)
-}
-
-func (u UDP) Inc() {
+// Inc increments the metrics for the audit record.
+func (u *UDP) Inc() {
 	udpMetric.WithLabelValues(u.metricValues()...).Inc()
 	udpPayloadEntropy.WithLabelValues().Observe(u.PayloadEntropy)
 	udpPayloadSize.WithLabelValues().Observe(float64(u.PayloadSize))
 }
 
-func (a *UDP) SetPacketContext(ctx *PacketContext) {
-
+// SetPacketContext sets the associated packet context for the audit record.
+func (u *UDP) SetPacketContext(ctx *PacketContext) {
 	// create new context and only add information that is
 	// not yet present on the audit record type
-	a.Context = &PacketContext{
+	u.Context = &PacketContext{
 		SrcIP: ctx.SrcIP,
 		DstIP: ctx.DstIP,
 	}
 }
 
-func (a UDP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (u *UDP) Src() string {
+	if u.Context != nil {
+		return u.Context.SrcIP
 	}
 	return ""
 }
 
-func (a UDP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (u *UDP) Dst() string {
+	if u.Context != nil {
+		return u.Context.DstIP
 	}
 	return ""
 }

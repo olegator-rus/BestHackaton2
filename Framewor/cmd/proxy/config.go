@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package proxy
 
 import (
 	"fmt"
@@ -20,19 +20,17 @@ import (
 	"strconv"
 
 	"github.com/evilsocket/islazy/tui"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
-var (
-	// config for the commandline application
-	c *Config
-)
+// config for the commandline application.
+var c = new(config)
 
-// Config represents the proxy configuration
-type Config struct {
+// config represents the proxy configuration.
+type config struct {
 
 	// Proxies map holds all reverse proxies
-	Proxies map[string]ReverseProxyConfig `yaml:"proxies"`
+	Proxies map[string]reverseProxyConfig `yaml:"proxies"`
 
 	// CertFile for TLS secured connections
 	CertFile string `yaml:"certFile"`
@@ -44,17 +42,20 @@ type Config struct {
 	Logdir string `yaml:"logdir"`
 }
 
-// Dump prints the current configuration
-func (c Config) Dump(w io.Writer) {
-
+// dump prints the current configuration.
+func (c config) dump(w io.Writer) {
 	fmt.Println("logDir:", c.Logdir)
 
 	// init rows for table
-	var rows = [][]string{}
+	var (
+		rows  = make([][]string, len(c.Proxies))
+		index int
+	)
 
 	// gather infos from proxies
 	for name, p := range c.Proxies {
-		rows = append(rows, []string{name, p.Local, p.Remote, strconv.FormatBool(p.TLS)})
+		rows[index] = []string{name, p.Local, p.Remote, strconv.FormatBool(p.TLS)}
+		index++
 	}
 
 	// print table
@@ -62,17 +63,13 @@ func (c Config) Dump(w io.Writer) {
 	fmt.Println()
 }
 
-// ParseConfiguration reads the config file and returns a config instance
-func ParseConfiguration(path string) (*Config, error) {
-
+// parseConfiguration reads the config file and returns a config instance.
+func parseConfiguration(path string) (*config, error) {
 	// read file at path
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-
-	// init config instance
-	var c = new(Config)
 
 	// unmarshal data into instance
 	err = yaml.Unmarshal(b, &c)

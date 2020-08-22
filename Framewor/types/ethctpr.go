@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -27,25 +28,30 @@ var fieldsEthernetCTPReply = []string{
 	"Data",          // bytes
 }
 
-func (i EthernetCTPReply) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (ectpr *EthernetCTPReply) CSVHeader() []string {
 	return filter(fieldsEthernetCTPReply)
 }
 
-func (i EthernetCTPReply) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (ectpr *EthernetCTPReply) CSVRecord() []string {
 	return filter([]string{
-		formatTimestamp(i.Timestamp),
-		formatInt32(i.Function),
-		formatInt32(i.ReceiptNumber),
-		hex.EncodeToString(i.Data),
+		formatTimestamp(ectpr.Timestamp),
+		formatInt32(ectpr.Function),
+		formatInt32(ectpr.ReceiptNumber),
+		hex.EncodeToString(ectpr.Data),
 	})
 }
 
-func (i EthernetCTPReply) Time() string {
-	return i.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (ectpr *EthernetCTPReply) Time() string {
+	return ectpr.Timestamp
 }
 
-func (a EthernetCTPReply) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (ectpr *EthernetCTPReply) JSON() (string, error) {
+	ectpr.Timestamp = utils.TimeToUnixMilli(ectpr.Timestamp)
+	return jsonMarshaler.MarshalToString(ectpr)
 }
 
 var ethernetCTPReplyMetric = prometheus.NewCounterVec(
@@ -56,21 +62,21 @@ var ethernetCTPReplyMetric = prometheus.NewCounterVec(
 	fieldsEthernetCTPReply[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ethernetCTPReplyMetric)
+// Inc increments the metrics for the audit record.
+func (ectpr *EthernetCTPReply) Inc() {
+	ethernetCTPReplyMetric.WithLabelValues(ectpr.CSVRecord()[1:]...).Inc()
 }
 
-func (a EthernetCTPReply) Inc() {
-	ethernetCTPReplyMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (ectpr *EthernetCTPReply) SetPacketContext(*PacketContext) {}
 
-func (a *EthernetCTPReply) SetPacketContext(ctx *PacketContext) {}
-
-// TODO
-func (a EthernetCTPReply) Src() string {
+// Src TODO.
+// Src returns the source address of the audit record.
+func (ectpr *EthernetCTPReply) Src() string {
 	return ""
 }
 
-func (a EthernetCTPReply) Dst() string {
+// Dst returns the destination address of the audit record.
+func (ectpr *EthernetCTPReply) Dst() string {
 	return ""
 }

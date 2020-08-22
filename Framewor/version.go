@@ -1,6 +1,6 @@
-// Netcap is a framework for network packet processing at the protocol level. Learn more at https://netcap.io.
+// Package netcap is a framework for network traffic analysis. Learn more at https://netcap.io.
 package netcap
 
 // Netcap version.
-var Version = "v0.4.7"
-var Commit = "6759e53197c4df3fc56d6e769863cbe7fbd35db2"
+var Version = "v0.5.2"
+var commit = "a334a6972d3306cdbd1fcc10f4e3a89e636e7bf0"

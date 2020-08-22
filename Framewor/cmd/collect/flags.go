@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,19 +11,37 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package collect
 
-import "flag"
+import (
+	"os"
+
+	"github.com/namsral/flag"
+
+	"github.com/dreadl0ck/netcap"
+)
+
+// Flags returns all flags.
+func Flags() (flags []string) {
+	fs.VisitAll(func(f *flag.Flag) {
+		flags = append(flags, f.Name)
+	})
+
+	return
+}
 
 var (
-	flagGenKeypair    = flag.Bool("gen-keypair", false, "generate keypair")
-	flagPrivKey       = flag.String("privkey", "", "path to the hex encoded server private key")
-	flagAddr          = flag.String("addr", "127.0.0.1:1335", "specify an adress and port to listen for incoming traffic")
-	flagVersion       = flag.Bool("version", false, "print netcap package version and exit")
-	files             = make(map[string]*AuditRecordHandle)
-	flagMemBufferSize = flag.Int("membuf-size", 1024*1024*10, "set size for membuf")
+	fs                 = flag.NewFlagSetWithEnvPrefix(os.Args[0], "NC", flag.ExitOnError)
+	flagGenerateConfig = fs.Bool("gen-config", false, "generate config")
+	_                  = fs.String("config", "", "read configuration from file at path")
+	flagGenKeypair     = fs.Bool("gen-keypair", false, "generate keypair")
+	flagPrivKey        = fs.String("privkey", "", "path to the hex encoded server private key")
+	flagAddr           = fs.String("addr", "127.0.0.1:1335", "specify an address and port to listen for incoming traffic")
+	flagVersion        = fs.Bool("version", false, "print netcap package version and exit")
+	files              = make(map[string]*auditRecordHandle)
+	flagMemBufferSize  = fs.Int("membuf-size", netcap.DefaultBufferSize, "set size for membuf")
 
 	// not configurable at the moment
 	// flagCompress   = flag.Bool("comp", true, "compress data when writing to disk")
-	// flagBuffer     = flag.Bool("buf", true, "buffer data before writing to disk")
+	// flagBuffer     = flag.Bool("buf", true, "buffer data before writing to disk").
 )

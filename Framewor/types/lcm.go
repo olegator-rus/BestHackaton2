@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -36,11 +37,13 @@ var fieldsLCM = []string{
 	"DstPort",
 }
 
-func (a LCM) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *LCM) CSVHeader() []string {
 	return filter(fieldsLCM)
 }
 
-func (a LCM) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *LCM) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if a.Context == nil {
 		a.Context = &PacketContext{}
@@ -62,12 +65,15 @@ func (a LCM) CSVRecord() []string {
 	})
 }
 
-func (a LCM) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *LCM) Time() string {
 	return a.Timestamp
 }
 
-func (a LCM) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *LCM) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var lcmMetric = prometheus.NewCounterVec(
@@ -78,26 +84,26 @@ var lcmMetric = prometheus.NewCounterVec(
 	fieldsLCM[1:],
 )
 
-func init() {
-	prometheus.MustRegister(lcmMetric)
-}
-
-func (a LCM) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *LCM) Inc() {
 	lcmMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *LCM) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a LCM) Src() string {
+// Src returns the source address of the audit record.
+func (a *LCM) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a LCM) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *LCM) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package proxy
 
 import (
 	"log"
@@ -19,18 +19,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// LogFileName holds name of the logfile
-const LogFileName = "net.proxy.log"
+// logFileName holds name of the logfile.
+const logFileName = "net.proxy.log"
 
-var (
-	// Log instance
-	Log   *zap.Logger
-	debug bool
-)
+// logger instance.
+var logger *zap.Logger
 
-// ConfigureLogger configures the logging instance
-func ConfigureLogger(debug bool, outputPath string) {
-
+// configureLogger configures the logging instance.
+func configureLogger(debug bool, outputPath string) {
 	var (
 		zc  zap.Config
 		err error
@@ -46,7 +42,7 @@ func ConfigureLogger(debug bool, outputPath string) {
 
 	// append outputPath
 	zc.OutputPaths = append(zc.OutputPaths, outputPath)
-	Log, err = zc.Build()
+	logger, err = zc.Build()
 	if err != nil {
 		log.Fatalf("failed to initialize zap logger: %v", err)
 	}

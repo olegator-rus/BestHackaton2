@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package proxy
 
 import (
 	"bytes"
@@ -25,23 +25,23 @@ import (
 	"net/url"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	"go.uber.org/zap"
 )
 
-// NetcapTransport contains a http.Transport for RoundTrips
-// and the target URL of the associated reverse proxy
-type NetcapTransport struct {
+// netcapTransport contains a http.Transport for RoundTrips
+// and the target URL of the associated reverse proxy.
+type netcapTransport struct {
 	proxyName string
 	rt        http.RoundTripper
 	targetURL *url.URL
-	proxy     *ReverseProxy
+	proxy     *reverseProxy
 }
 
-// RoundTrip implements the http.Transport interface
-func (t *NetcapTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-
+// RoundTrip implements the http.Transport interface.
+func (t *netcapTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	// set basic auth on request if present
 	if t.targetURL.User != nil {
 		pass, ok := t.targetURL.User.Password()
@@ -55,7 +55,7 @@ func (t *NetcapTransport) RoundTrip(req *http.Request) (resp *http.Response, err
 	req.Header.Set("Host", t.targetURL.Host)
 
 	if *flagDebug {
-		DumpHTTPRequest(req, t.proxyName)
+		dumpHTTPRequest(req, t.proxyName)
 	}
 
 	// Request Tracing
@@ -114,7 +114,6 @@ makeHTTPRequest:
 
 	// handle redirect and special status codes
 	switch resp.StatusCode {
-
 	// handle redirects
 	case http.StatusFound:
 
@@ -124,7 +123,7 @@ makeHTTPRequest:
 		// modify request
 		req.URL.Path = newLoc
 
-		Log.Info(t.proxyName+" proxy got a redirect.",
+		logger.Info(t.proxyName+" proxy got a redirect.",
 			zap.String("newLocation", newLoc),
 		)
 
@@ -134,14 +133,16 @@ makeHTTPRequest:
 
 	// collect the cookies for both request and response
 	var (
+		// TODO: include these into created HTTP audit record
 		reqCookies []string
 		resCookies []string
 	)
-	for _, c := range req.Cookies() {
-		reqCookies = append(reqCookies, c.String())
+	for _, cookie := range req.Cookies() {
+		reqCookies = append(reqCookies, cookie.String())
 	}
-	for _, c := range resp.Cookies() {
-		resCookies = append(resCookies, c.String())
+
+	for _, cookie := range resp.Cookies() {
+		resCookies = append(resCookies, cookie.String())
 	}
 
 	// read the raw bytes of the response body
@@ -150,9 +151,11 @@ makeHTTPRequest:
 	if err != nil {
 		return nil, err
 	}
+
 	if len(rawbody) != 0 {
 		// restore resp body or dumping it will fail later
 		var b bytes.Buffer
+
 		b.Write(rawbody)
 		resp.Body = ioutil.NopCloser(&b)
 
@@ -161,10 +164,10 @@ makeHTTPRequest:
 	}
 
 	if *flagDebug {
-		DumpHTTPResponse(resp, t.proxyName, rawbody)
+		dumpHTTPResponse(resp, t.proxyName, rawbody)
 	}
 
-	var sourceIP = req.RemoteAddr
+	sourceIP := req.RemoteAddr
 	if sourceIP == "" {
 		sourceIP = getIPAdress(req)
 	}
@@ -175,15 +178,15 @@ makeHTTPRequest:
 		Timestamp: utils.TimeToString(startTime),
 
 		// Request information
-		ReqCookies:         reqCookies,
+		// ReqCookies:         reqCookies,
 		Proto:              req.Proto,
-		Method:             string(req.Method),
-		Host:               string(req.URL.Host),
-		UserAgent:          string(req.UserAgent()),
-		Referer:            string(req.Referer()),
+		Method:             req.Method,
+		Host:               req.URL.Host,
+		UserAgent:          req.UserAgent(),
+		Referer:            req.Referer(),
 		ReqContentLength:   int32(req.ContentLength),
-		ContentType:        string(req.Header.Get("Content-Type")),
-		URL:                string(req.URL.String()),
+		ContentType:        req.Header.Get("Content-Type"),
+		URL:                req.URL.String(),
 		ReqContentEncoding: req.Header.Get("Content-Encoding"),
 
 		// Response information
@@ -191,9 +194,9 @@ makeHTTPRequest:
 		StatusCode:         int32(resp.StatusCode),
 		ResContentEncoding: resp.Header.Get("Content-Encoding"),
 		ServerName:         resp.Header.Get("Server"),
-		ResCookies:         resCookies,
-		ResContentType:     string(resp.Header.Get("Content-Type")),
-		DoneAfter:          delta.Nanoseconds(),
+
+		ResContentType: resp.Header.Get("Content-Type"),
+		DoneAfter:      delta.Nanoseconds(),
 
 		// Address information
 		SrcIP: sourceIP,
@@ -213,14 +216,15 @@ makeHTTPRequest:
 
 	// dump as JSON if configured
 	if *flagDump {
-		j, err := r.JSON()
-		if err != nil {
-			log.Fatal(err)
+		j, errJSON := r.JSON()
+		if errJSON != nil {
+			log.Fatal(errJSON)
 		}
 
 		// pretty print if configured
 		if *flagDumpFormatted {
 			var b bytes.Buffer
+
 			err = json.Indent(&b, []byte(j), "", " ")
 			if err != nil {
 				log.Fatal(err)

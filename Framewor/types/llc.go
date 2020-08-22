@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -29,11 +30,13 @@ var fieldsLLC = []string{
 	"Control",   // int32
 }
 
-func (l LLC) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (l *LLC) CSVHeader() []string {
 	return filter(fieldsLLC)
 }
 
-func (l LLC) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (l *LLC) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(l.Timestamp),
 		formatInt32(l.DSAP),      // int32
@@ -44,12 +47,15 @@ func (l LLC) CSVRecord() []string {
 	})
 }
 
-func (l LLC) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (l *LLC) Time() string {
 	return l.Timestamp
 }
 
-func (a LLC) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (l *LLC) JSON() (string, error) {
+	l.Timestamp = utils.TimeToUnixMilli(l.Timestamp)
+	return jsonMarshaler.MarshalToString(l)
 }
 
 var llcMetric = prometheus.NewCounterVec(
@@ -60,21 +66,21 @@ var llcMetric = prometheus.NewCounterVec(
 	fieldsLLC[1:],
 )
 
-func init() {
-	prometheus.MustRegister(llcMetric)
+// Inc increments the metrics for the audit record.
+func (l *LLC) Inc() {
+	llcMetric.WithLabelValues(l.CSVRecord()[1:]...).Inc()
 }
 
-func (a LLC) Inc() {
-	llcMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (l *LLC) SetPacketContext(*PacketContext) {}
 
-func (a *LLC) SetPacketContext(ctx *PacketContext) {}
-
-// TODO
-func (a LLC) Src() string {
+// Src TODO.
+// Src returns the source address of the audit record.
+func (l *LLC) Src() string {
 	return ""
 }
 
-func (a LLC) Dst() string {
+// Dst returns the destination address of the audit record.
+func (l *LLC) Dst() string {
 	return ""
 }

@@ -1,26 +1,36 @@
 package collector
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 
 	"github.com/dreadl0ck/gopacket/pcapgo"
 )
 
-var ngFile = "pcaps/Monday-WorkingHours.pcapng"
-var pcapFile = "pcaps/maccdc2012_00000.pcap"
+var (
+	ngFile   = "../pcaps/Monday-WorkingHours.pcapng"
+	pcapFile = "../pcaps/maccdc2012_00000.pcap"
+)
 
 func BenchmarkReadPcapNG(b *testing.B) {
 	r, f, err := openPcapNG(ngFile)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		errClose := f.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println(errClose)
+		}
+	}()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _, err := r.ReadPacketData()
+		_, _, err = r.ReadPacketData()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -32,12 +42,17 @@ func BenchmarkReadPcapNGZeroCopy(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		errClose := f.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println(errClose)
+		}
+	}()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _, err := r.ZeroCopyReadPacketData()
+		_, _, err = r.ZeroCopyReadPacketData()
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -65,13 +80,18 @@ func BenchmarkReadPcap(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		errClose := f.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println(errClose)
+		}
+	}()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _, err := r.ReadPacketData()
-		if err != nil {
+		_, _, err = r.ReadPacketData()
+		if err != nil && !errors.Is(err, io.EOF) {
 			b.Fatal(err)
 		}
 	}

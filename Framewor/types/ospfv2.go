@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -39,11 +40,13 @@ var fieldsOSPFv2 = []string{
 	"DstIP",
 }
 
-func (a OSPFv2) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *OSPFv2) CSVHeader() []string {
 	return filter(fieldsOSPFv2)
 }
 
-func (a OSPFv2) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *OSPFv2) CSVRecord() []string {
 	var (
 		lsas   []string
 		lsreqs []string
@@ -78,26 +81,26 @@ func (a OSPFv2) CSVRecord() []string {
 	})
 }
 
-func (a OSPFv2) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *OSPFv2) Time() string {
 	return a.Timestamp
 }
 
-func (l LSReq) ToString() string {
+func (l LSReq) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(l.LSType)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.LSID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.AdvRouter)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r RouterLSAV2) ToString() string {
-
+func (r *RouterLSAV2) toString() string {
 	var routers []string
 	for _, e := range r.Routers {
 		routers = append(routers, toString(e))
@@ -105,37 +108,36 @@ func (r RouterLSAV2) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.Flags)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.Links)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(routers...)) // []*RouterV2
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r ASExternalLSAV2) ToString() string {
+func (r *ASExternalLSAV2) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(r.NetworkMask)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.ExternalBit)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Metric)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.ForwardingAddress)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.ExternalRouteTag)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r RouterLSA) ToString() string {
-
+func (r *RouterLSA) toString() string {
 	var routers []string
 	for _, e := range r.Routers {
 		routers = append(routers, toString(e))
@@ -143,87 +145,86 @@ func (r RouterLSA) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.Flags)) //  int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Options)) //  uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(routers...)) //  []*Router
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r NetworkLSA) ToString() string {
+func (r *NetworkLSA) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(r.Options)) //    uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(joinUints(r.AttachedRouter)) // []uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r InterAreaPrefixLSA) ToString() string {
+func (r *InterAreaPrefixLSA) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(r.Metric)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.PrefixLength)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.PrefixOptions)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(r.AddressPrefix)) // []byte
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r InterAreaRouterLSA) ToString() string {
+func (r *InterAreaRouterLSA) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(r.Options)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Metric)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.DestinationRouterID)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r ASExternalLSA) ToString() string {
+func (r *ASExternalLSA) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.Flags)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Metric)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.PrefixLength)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.PrefixOptions)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.RefLSType)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(r.AddressPrefix)) // []byte
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(r.ForwardingAddress)) // []byte
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.ExternalRouteTag)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.RefLinkStateID)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r LinkLSA) ToString() string {
-
+func (r *LinkLSA) toString() string {
 	var prefixes []string
 	for _, p := range r.Prefixes {
 		prefixes = append(prefixes, toString(p))
@@ -231,23 +232,22 @@ func (r LinkLSA) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.RtrPriority)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Options)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(r.LinkLocalAddress)) // []byte
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.NumOfPrefixes)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(prefixes...)) // []*LSAPrefix
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r IntraAreaPrefixLSA) ToString() string {
-
+func (r *IntraAreaPrefixLSA) toString() string {
 	var prefixes []string
 	for _, p := range r.Prefixes {
 		prefixes = append(prefixes, toString(p))
@@ -255,90 +255,88 @@ func (r IntraAreaPrefixLSA) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.NumOfPrefixes)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.RefLSType)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.RefLinkStateID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.RefAdvRouter)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(prefixes...)) // []*LSAPrefix
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r Router) ToString() string {
+func (r *Router) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 
 	b.WriteString(formatInt32(r.Type)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(r.Metric)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.InterfaceID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.NeighborInterfaceID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.NeighborRouterID)) // uint32
 
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (r RouterV2) ToString() string {
+func (r *RouterV2) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(r.Type)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.LinkID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.LinkData)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(r.Metric)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l LSA) ToString() string {
-
+func (l *LSA) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 
 	b.WriteString(toString(l.Header)) // *LSAheader
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.RLSAV2)) // *RouterLSAV2
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.ASELSAV2)) // *ASExternalLSAV2
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.RLSA)) // *RouterLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.NLSA)) // *NetworkLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.InterAPrefixLSA)) // *InterAreaPrefixLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.IARouterLSA)) // *InterAreaRouterLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.ASELSA)) // *ASExternalLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.LLSA)) // *LinkLSA
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(toString(l.IntraAPrefixLSA)) // *IntraAreaPrefixLSA
 
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l LSUpdate) ToString() string {
-
+func (l LSUpdate) toString() string {
 	var lsas []string
 	for _, lsa := range l.LSAs {
 		lsas = append(lsas, toString(lsa))
@@ -346,17 +344,16 @@ func (l LSUpdate) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(l.NumOfLSAs)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(lsas...)) // []*LSA
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l DbDescPkg) ToString() string {
-
+func (l DbDescPkg) toString() string {
 	var headers []string
 	for _, lsa := range l.LSAinfo {
 		headers = append(headers, toString(lsa))
@@ -364,91 +361,85 @@ func (l DbDescPkg) ToString() string {
 
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(l.Options)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.InterfaceMTU)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.Flags)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.DDSeqNumber)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(headers...)) // []*LSAheader
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l HelloPkgV2) ToString() string {
-
+func (l HelloPkgV2) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatUint32(l.InterfaceID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.RtrPriority)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.Options)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.HelloInterval)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.RouterDeadInterval)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.DesignatedRouterID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.BackupDesignatedRouterID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(joinUints(l.NeighborID)) //  []uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.NetworkMask)) // uint32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l LSAPrefix) ToString() string {
+func (l LSAPrefix) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(l.PrefixLength)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.PrefixOptions)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.Metric)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(l.AddressPrefix)) // []byte
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (l LSAheader) ToString() string {
-
+func (l LSAheader) toString() string {
 	var b strings.Builder
 
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(l.LSAge)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.LSType)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.LinkStateID)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.AdvRouter)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(l.LSSeqNumber)) // uint32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.LSChecksum)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.Length)) // int32
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(l.LSOptions)) // int32
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
-}
-
-func (u LSAheader) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
 }
 
 var ospf2Metric = prometheus.NewCounterVec(
@@ -459,30 +450,32 @@ var ospf2Metric = prometheus.NewCounterVec(
 	fieldsOSPFv2[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ospf2Metric)
-}
-
-func (a OSPFv2) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *OSPFv2) Inc() {
 	ospf2Metric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a OSPFv2) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *OSPFv2) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
+// SetPacketContext sets the associated packet context for the audit record.
 func (a *OSPFv2) SetPacketContext(ctx *PacketContext) {
 	a.Context = ctx
 }
 
-func (a OSPFv2) Src() string {
+// Src returns the source address of the audit record.
+func (a *OSPFv2) Src() string {
 	if a.Context != nil {
 		return a.Context.SrcIP
 	}
 	return ""
 }
 
-func (a OSPFv2) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *OSPFv2) Dst() string {
 	if a.Context != nil {
 		return a.Context.DstIP
 	}

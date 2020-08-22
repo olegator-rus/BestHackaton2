@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -46,11 +47,13 @@ var fieldsDNS = []string{
 	"DstPort",
 }
 
-func (d DNS) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (d *DNS) CSVHeader() []string {
 	return filter(fieldsDNS)
 }
 
-func (d DNS) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (d *DNS) CSVRecord() []string {
 	var (
 		questions   = make([]string, len(d.Questions))
 		answers     = make([]string, len(d.Answers))
@@ -58,16 +61,16 @@ func (d DNS) CSVRecord() []string {
 		additionals = make([]string, len(d.Additionals))
 	)
 	for _, q := range d.Questions {
-		questions = append(questions, q.ToString())
+		questions = append(questions, q.toString())
 	}
 	for _, q := range d.Answers {
-		answers = append(questions, q.ToString())
+		answers = append(questions, q.toString())
 	}
 	for _, q := range d.Authorities {
-		authorities = append(questions, q.ToString())
+		authorities = append(questions, q.toString())
 	}
 	for _, q := range d.Additionals {
-		additionals = append(questions, q.ToString())
+		additionals = append(questions, q.toString())
 	}
 	// prevent accessing nil pointer
 	if d.Context == nil {
@@ -99,106 +102,109 @@ func (d DNS) CSVRecord() []string {
 	})
 }
 
-func (d DNS) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (d *DNS) Time() string {
 	return d.Timestamp
 }
 
-func (q DNSQuestion) ToString() string {
+func (q *DNSQuestion) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(string(q.Name))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Class))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (q DNSResourceRecord) ToString() string {
+func (q *DNSResourceRecord) toString() string {
 	var txts []string
 	for _, t := range q.TXTs {
 		txts = append(txts, string(t))
 	}
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(string(q.Name))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Type))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Class))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.TTL))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.DataLength))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(q.Data))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(q.IP)
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.NS))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.CNAME))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.PTR))
-	b.WriteString(Separator)
-	b.WriteString(q.SOA.ToString())
-	b.WriteString(Separator)
-	b.WriteString(q.SRV.ToString())
-	b.WriteString(Separator)
-	b.WriteString(q.MX.ToString())
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
+	b.WriteString(q.SOA.toString())
+	b.WriteString(FieldSeparator)
+	b.WriteString(q.SRV.toString())
+	b.WriteString(FieldSeparator)
+	b.WriteString(q.MX.toString())
+	b.WriteString(FieldSeparator)
 	b.WriteString(join(txts...))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (q *DNSSOA) ToString() string {
+func (q *DNSSOA) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(string(q.MName))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.RName))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.Serial))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.Refresh))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.Retry))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.Expire))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatUint32(q.Minimum))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (q *DNSSRV) ToString() string {
+func (q *DNSSRV) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(q.Priority))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Weight))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(q.Port))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.Name))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (q *DNSMX) ToString() string {
+func (q *DNSMX) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(q.Preference))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(string(q.Name))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 	return b.String()
 }
 
-func (a DNS) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (d *DNS) JSON() (string, error) {
+	d.Timestamp = utils.TimeToUnixMilli(d.Timestamp)
+	return jsonMarshaler.MarshalToString(d)
 }
 
 var dnsMetric = prometheus.NewCounterVec(
@@ -209,28 +215,28 @@ var dnsMetric = prometheus.NewCounterVec(
 	fieldsDNS[1:],
 )
 
-func init() {
-	prometheus.MustRegister(dnsMetric)
+// Inc increments the metrics for the audit record.
+func (d *DNS) Inc() {
+	dnsMetric.WithLabelValues(d.CSVRecord()[1:]...).Inc()
 }
 
-func (a DNS) Inc() {
-	dnsMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (d *DNS) SetPacketContext(ctx *PacketContext) {
+	d.Context = ctx
 }
 
-func (a *DNS) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a DNS) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (d *DNS) Src() string {
+	if d.Context != nil {
+		return d.Context.SrcIP
 	}
 	return ""
 }
 
-func (a DNS) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (d *DNS) Dst() string {
+	if d.Context != nil {
+		return d.Context.DstIP
 	}
 	return ""
 }

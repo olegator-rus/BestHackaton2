@@ -1,6 +1,6 @@
 /*
  * NETCAP - Network Capture Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-// This package implements a simple reader and writer for streams of length-delimited byte records.
+// Package delimited implements a simple reader and writer for streams of length-delimited byte records.
 // Each record is written as a varint-encoded length in bytes, followed immediately by the record itself.
 // A stream consists of a sequence of such records packed consecutively without additional padding.
 // No checksums or compression are being used.
@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
-// Writer outputs delimited records to an io.Writer
+// Writer outputs delimited records to an io.Writer.
 type Writer struct {
 	w io.Writer
 }
@@ -37,33 +37,30 @@ func NewWriter(w io.Writer) *Writer {
 
 // Put writes the specified record to the writer
 // Note:
-//  - equivalent to WriteRecord, but discards the number of bytes written
+//  - equivalent to writeRecord, but discards the number of bytes written
 func (w Writer) Put(record []byte) error {
-
 	// ignore the amount of bytes written
-	_, err := w.WriteRecord(record)
+	_, err := w.writeRecord(record)
 
 	return err
 }
 
-// PutProto encodes and writes the specified proto.Message to the writer
+// PutProto encodes and writes the specified proto.Message to the writer.
 func (w Writer) PutProto(msg proto.Message) error {
-
 	// pack protocol buffer
 	rec, err := proto.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("error encoding proto: %v", err)
+		return fmt.Errorf("error encoding proto: %w", err)
 	}
 
 	// write record and return error
 	return w.Put(rec)
 }
 
-// WriteRecord writes the specified record to the underlying writer
+// writeRecord writes the specified record to the underlying writer
 // Note:
 //  - returns the total number of bytes written including the length tag
-func (w Writer) WriteRecord(record []byte) (int, error) {
-
+func (w Writer) writeRecord(record []byte) (int, error) {
 	var (
 		buffer [binary.MaxVarintLen64]byte
 		varint = binary.PutUvarint(buffer[:], uint64(len(record)))

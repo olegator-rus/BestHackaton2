@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -34,11 +35,13 @@ var fieldsSIP = []string{
 	"DstPort",
 }
 
-func (s SIP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (s *SIP) CSVHeader() []string {
 	return filter(fieldsSIP)
 }
 
-func (s SIP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (s *SIP) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if s.Context == nil {
 		s.Context = &PacketContext{}
@@ -58,12 +61,15 @@ func (s SIP) CSVRecord() []string {
 	})
 }
 
-func (s SIP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (s *SIP) Time() string {
 	return s.Timestamp
 }
 
-func (u SIP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
+// JSON returns the JSON representation of the audit record.
+func (u *SIP) JSON() (string, error) {
+	u.Timestamp = utils.TimeToUnixMilli(u.Timestamp)
+	return jsonMarshaler.MarshalToString(u)
 }
 
 var sipMetric = prometheus.NewCounterVec(
@@ -74,28 +80,28 @@ var sipMetric = prometheus.NewCounterVec(
 	fieldsSIP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(sipMetric)
+// Inc increments the metrics for the audit record.
+func (s *SIP) Inc() {
+	sipMetric.WithLabelValues(s.CSVRecord()[1:]...).Inc()
 }
 
-func (a SIP) Inc() {
-	sipMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (s *SIP) SetPacketContext(ctx *PacketContext) {
+	s.Context = ctx
 }
 
-func (a *SIP) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a SIP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (s *SIP) Src() string {
+	if s.Context != nil {
+		return s.Context.SrcIP
 	}
 	return ""
 }
 
-func (a SIP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (s *SIP) Dst() string {
+	if s.Context != nil {
+		return s.Context.DstIP
 	}
 	return ""
 }

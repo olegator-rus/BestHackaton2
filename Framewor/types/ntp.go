@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -43,31 +44,33 @@ var fieldsNTP = []string{
 	"DstPort",
 }
 
-func (n NTP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (n *NTP) CSVHeader() []string {
 	return filter(fieldsNTP)
 }
 
-func (n NTP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (n *NTP) CSVRecord() []string {
 	// prevent accessing nil pointer
 	if n.Context == nil {
 		n.Context = &PacketContext{}
 	}
 	return filter([]string{
 		formatTimestamp(n.Timestamp),
-		formatInt32(n.LeapIndicator),                         // int32
-		formatInt32(n.Version),                               // int32
-		formatInt32(n.Mode),                                  // int32
-		formatInt32(n.Stratum),                               // int32
-		formatInt32(n.Poll),                                  // int32
-		formatInt32(n.Precision),                             // int32
-		strconv.FormatUint(uint64(n.RootDelay), 10),          // uint32
-		strconv.FormatUint(uint64(n.RootDispersion), 10),     // uint32
-		strconv.FormatUint(uint64(n.ReferenceID), 10),        // uint32
-		strconv.FormatUint(uint64(n.ReferenceTimestamp), 10), // uint64
-		strconv.FormatUint(uint64(n.OriginTimestamp), 10),    // uint64
-		strconv.FormatUint(uint64(n.ReceiveTimestamp), 10),   // uint64
-		strconv.FormatUint(uint64(n.TransmitTimestamp), 10),  // uint64
-		hex.EncodeToString(n.ExtensionBytes),                 // []byte
+		formatInt32(n.LeapIndicator),                     // int32
+		formatInt32(n.Version),                           // int32
+		formatInt32(n.Mode),                              // int32
+		formatInt32(n.Stratum),                           // int32
+		formatInt32(n.Poll),                              // int32
+		formatInt32(n.Precision),                         // int32
+		strconv.FormatUint(uint64(n.RootDelay), 10),      // uint32
+		strconv.FormatUint(uint64(n.RootDispersion), 10), // uint32
+		strconv.FormatUint(uint64(n.ReferenceID), 10),    // uint32
+		strconv.FormatUint(n.ReferenceTimestamp, 10),     // uint64
+		strconv.FormatUint(n.OriginTimestamp, 10),        // uint64
+		strconv.FormatUint(n.ReceiveTimestamp, 10),       // uint64
+		strconv.FormatUint(n.TransmitTimestamp, 10),      // uint64
+		hex.EncodeToString(n.ExtensionBytes),             // []byte
 		n.Context.SrcIP,
 		n.Context.DstIP,
 		n.Context.SrcPort,
@@ -75,12 +78,15 @@ func (n NTP) CSVRecord() []string {
 	})
 }
 
-func (n NTP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (n *NTP) Time() string {
 	return n.Timestamp
 }
 
-func (u NTP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&u)
+// JSON returns the JSON representation of the audit record.
+func (n *NTP) JSON() (string, error) {
+	n.Timestamp = utils.TimeToUnixMilli(n.Timestamp)
+	return jsonMarshaler.MarshalToString(n)
 }
 
 var ntpMetric = prometheus.NewCounterVec(
@@ -91,28 +97,28 @@ var ntpMetric = prometheus.NewCounterVec(
 	fieldsNTP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ntpMetric)
+// Inc increments the metrics for the audit record.
+func (n *NTP) Inc() {
+	ntpMetric.WithLabelValues(n.CSVRecord()[1:]...).Inc()
 }
 
-func (a NTP) Inc() {
-	ntpMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (n *NTP) SetPacketContext(ctx *PacketContext) {
+	n.Context = ctx
 }
 
-func (a *NTP) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a NTP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (n *NTP) Src() string {
+	if n.Context != nil {
+		return n.Context.SrcIP
 	}
 	return ""
 }
 
-func (a NTP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (n *NTP) Dst() string {
+	if n.Context != nil {
+		return n.Context.DstIP
 	}
 	return ""
 }

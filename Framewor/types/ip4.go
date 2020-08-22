@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -41,14 +42,16 @@ var fieldsIPv4 = []string{
 	"PayloadSize",    // int32
 }
 
-func (i IPv4) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (i *IPv4) CSVHeader() []string {
 	return filter(fieldsIPv4)
 }
 
-func (i IPv4) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (i *IPv4) CSVRecord() []string {
 	var opts []string
 	for _, o := range i.Options {
-		opts = append(opts, o.ToString())
+		opts = append(opts, o.toString())
 	}
 	return filter([]string{
 		formatTimestamp(i.Timestamp),
@@ -71,26 +74,28 @@ func (i IPv4) CSVRecord() []string {
 	})
 }
 
-func (i IPv4) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (i *IPv4) Time() string {
 	return i.Timestamp
 }
 
-func (i IPv4Option) ToString() string {
-
+func (i IPv4Option) toString() string {
 	var b strings.Builder
-	b.WriteString(Begin)
+	b.WriteString(StructureBegin)
 	b.WriteString(formatInt32(i.OptionType))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(formatInt32(i.OptionLength))
-	b.WriteString(Separator)
+	b.WriteString(FieldSeparator)
 	b.WriteString(hex.EncodeToString(i.OptionData))
-	b.WriteString(End)
+	b.WriteString(StructureEnd)
 
 	return b.String()
 }
 
-func (a IPv4) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (i *IPv4) JSON() (string, error) {
+	i.Timestamp = utils.TimeToUnixMilli(i.Timestamp)
+	return jsonMarshaler.MarshalToString(i)
 }
 
 var (
@@ -135,7 +140,7 @@ var fieldsIPv4Metrics = []string{
 	"DstIP",      // string
 }
 
-func (i IPv4) metricValues() []string {
+func (i *IPv4) metricValues() []string {
 	return []string{
 		formatInt32(i.Version), // int32
 		formatInt32(i.IHL),     // int32
@@ -151,32 +156,29 @@ func (i IPv4) metricValues() []string {
 	}
 }
 
-func init() {
-	prometheus.MustRegister(ip4Metric)
-	prometheus.MustRegister(ip4PayloadEntropy)
-	prometheus.MustRegister(ip4PayloadSize)
+// Inc increments the metrics for the audit record.
+func (i *IPv4) Inc() {
+	ip4Metric.WithLabelValues(i.metricValues()...).Inc()
+	ip4PayloadEntropy.WithLabelValues().Observe(i.PayloadEntropy)
+	ip4PayloadSize.WithLabelValues().Observe(float64(i.PayloadSize))
 }
 
-func (a IPv4) Inc() {
-	ip4Metric.WithLabelValues(a.metricValues()...).Inc()
-	ip4PayloadEntropy.WithLabelValues().Observe(a.PayloadEntropy)
-	ip4PayloadSize.WithLabelValues().Observe(float64(a.PayloadSize))
-}
-
-func (a *IPv4) SetPacketContext(ctx *PacketContext) {
-
+// SetPacketContext sets the associated packet context for the audit record.
+func (i *IPv4) SetPacketContext(ctx *PacketContext) {
 	// create new context and only add information that is
 	// not yet present on the audit record type
-	a.Context = &PacketContext{
+	i.Context = &PacketContext{
 		SrcPort: ctx.SrcPort,
 		DstPort: ctx.DstPort,
 	}
 }
 
-func (a IPv4) Src() string {
-	return a.SrcIP
+// Src returns the source address of the audit record.
+func (i *IPv4) Src() string {
+	return i.SrcIP
 }
 
-func (a IPv4) Dst() string {
-	return a.DstIP
+// Dst returns the destination address of the audit record.
+func (i *IPv4) Dst() string {
+	return i.DstIP
 }

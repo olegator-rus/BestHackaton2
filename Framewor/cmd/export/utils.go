@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,10 +11,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package export
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,31 +23,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dreadl0ck/netcap/utils"
-
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
+	"github.com/dreadl0ck/netcap/utils"
 )
 
 func printHeader() {
 	netcap.PrintLogo()
 	fmt.Println()
-	fmt.Println("usage examples:")
-	fmt.Println("	$ net.export -r dump.pcap")
-	fmt.Println("	$ net.export -iface eth0 -promisc=false")
-	fmt.Println("	$ net.export -r TCP.ncap.gz")
-	fmt.Println("	$ net.export .")
+	fmt.Println("export tool usage examples:")
+	fmt.Println("	$ net export -read dump.pcap")
+	fmt.Println("	$ net export -iface eth0 -promisc=false")
+	fmt.Println("	$ net export -read TCP.ncap.gz")
+	fmt.Println("	$ net export .")
 	fmt.Println()
 }
 
-// usage prints the use
+// usage prints the use.
 func printUsage() {
 	printHeader()
-	flag.PrintDefaults()
+	fs.PrintDefaults()
 }
 
 func exportDir(path string) {
-
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal("failed to read dir: ", err)
@@ -60,7 +58,6 @@ func exportDir(path string) {
 	)
 
 	for _, f := range files {
-
 		var (
 			fName = f.Name()
 			ext   = filepath.Ext(fName)
@@ -68,7 +65,6 @@ func exportDir(path string) {
 
 		if ext == ".ncap" || ext == ".gz" {
 			if !*flagReplay {
-
 				fmt.Println("exporting", fName)
 
 				// add to waitgroup
@@ -84,6 +80,7 @@ func exportDir(path string) {
 
 				continue
 			}
+
 			times[fName] = firstTimestamp(fName)
 		}
 	}
@@ -94,12 +91,14 @@ func exportDir(path string) {
 			begin     = time.Now()
 			beginPath string
 		)
+
 		for p, t := range times {
 			if t.Before(begin) {
 				begin = t
 				beginPath = p
 			}
 		}
+
 		fmt.Println("exporting", beginPath)
 		wg.Add(1)
 		count++
@@ -114,16 +113,15 @@ func exportDir(path string) {
 		delete(times, beginPath)
 
 		for p, t := range times {
-
 			var (
 				// copy to avoid capturing loop variable
-				path = p
+				pathCopy = p
 
 				// calculate delta to first timestamp
 				deltaToBegin = t.Sub(begin)
 			)
 
-			fmt.Println("exporting", p, "in", deltaToBegin)
+			fmt.Println("exporting", pathCopy, "in", deltaToBegin)
 
 			// add to waitgroup
 			wg.Add(1)
@@ -132,7 +130,6 @@ func exportDir(path string) {
 			count++
 
 			go func() {
-
 				fmt.Println("SINCE:", time.Since(beginExportFirstFile))
 
 				// sub the time needed to spawn the goroutine
@@ -147,7 +144,7 @@ func exportDir(path string) {
 				time.Sleep(sleep)
 
 				// begin exporting the file
-				exportFile(path)
+				exportFile(pathCopy)
 
 				// done
 				wg.Done()
@@ -162,27 +159,36 @@ func exportDir(path string) {
 }
 
 // this will open the netcap dump file at path
-// and return the timestamp of the first audit record in there
+// and return the timestamp of the first audit record in there.
 func firstTimestamp(path string) time.Time {
-
 	r, err := netcap.Open(path, netcap.DefaultBufferSize)
 	if err != nil {
 		log.Fatal("failed to open netcap file:", err)
 	}
-	defer r.Close()
+
+	defer func() {
+		errClose := r.Close()
+		if errClose != nil {
+			utils.DebugLog.Println("failed to close file:", errClose)
+		}
+	}()
 
 	var (
 		// read netcap file header
-		header = r.ReadHeader()
+		header, errFileHeader = r.ReadHeader()
 
-		// initalize a record instance for the type from the header
+		// initialize a record instance for the type from the header
 		record = netcap.InitRecord(header.Type)
 	)
 
+	if errFileHeader != nil {
+		log.Fatal(errFileHeader)
+	}
+
 	for {
 		// read next record
-		err := r.Next(record)
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		err = r.Next(record)
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			// bail out on end of file
 			break
 		} else if err != nil {
@@ -199,30 +205,40 @@ func firstTimestamp(path string) time.Time {
 }
 
 func exportFile(path string) {
-
 	var (
 		count  = 0
 		r, err = netcap.Open(path, *flagMemBufferSize)
 	)
+
 	if err != nil {
 		log.Fatal("failed to open netcap file:", err)
 	}
-	defer r.Close()
+
+	defer func() {
+		errClose := r.Close()
+		if errClose != nil {
+			utils.DebugLog.Println("failed to close file:", errClose)
+		}
+	}()
 
 	var (
 		// read netcap file header
-		header = r.ReadHeader()
+		header, errFileHeader = r.ReadHeader()
 
-		// initalize a record instance for the type from the header
+		// initialize a record instance for the type from the header
 		record = netcap.InitRecord(header.Type)
 
-		firstTimestamp time.Time
+		firstTimestampValue time.Time
 	)
+
+	if errFileHeader != nil {
+		log.Fatal(errFileHeader)
+	}
 
 	for {
 		// read next record
-		err := r.Next(record)
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		err = r.Next(record)
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			// bail out on end of file
 			break
 		} else if err != nil {
@@ -235,11 +251,12 @@ func exportFile(path string) {
 
 			if *flagReplay {
 				t := utils.StringToTime(p.Time())
+
 				if count == 1 {
-					firstTimestamp = t
+					firstTimestampValue = t
 				} else {
 					go func() {
-						sleep := t.Sub(firstTimestamp)
+						sleep := t.Sub(firstTimestampValue)
 
 						// fmt.Println(sleep)
 
@@ -247,16 +264,18 @@ func exportFile(path string) {
 						// increment metric
 						p.Inc()
 					}()
+
 					continue
 				}
 			}
 
 			if *flagDumpJSON {
 				// dump as JSON
-				j, err := p.JSON()
-				if err != nil {
-					log.Fatal(err)
+				j, errJSON := p.JSON()
+				if errJSON != nil {
+					log.Fatal(errJSON)
 				}
+
 				fmt.Println(j)
 			}
 

@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -14,29 +14,39 @@
 package io
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dreadl0ck/netcap/types"
-	"github.com/golang/protobuf/proto"
 )
 
-type CSVWriter struct {
+// CSVProtoWriter implements writing audit records to disk in the CSV format.
+type CSVProtoWriter struct {
 	w io.Writer
 	sync.Mutex
 }
 
-func NewCSVWriter(w io.Writer) *CSVWriter {
-	return &CSVWriter{
+// NewCSVWriter returns a new CSV writer instance.
+func NewCSVWriter(w io.Writer) *CSVProtoWriter {
+	return &CSVProtoWriter{
 		w: w,
 	}
 }
 
-func (w *CSVWriter) WriteHeader(msg proto.Message) (int, error) {
+// WriteHeader writes the CSV header to the underlying file.
+func (w *CSVProtoWriter) WriteHeader(h *types.Header, msg proto.Message) (int, error) {
 	w.Lock()
 	defer w.Unlock()
+
+	n, err := w.w.Write([]byte(fmt.Sprintf("# Type: %s, Created: %s, Source: %s, ContainsPayloads: %t\n", h.Type.String(), h.Created, h.InputSource, h.ContainsPayloads)))
+	if err != nil {
+		return n, err
+	}
 
 	if csv, ok := msg.(types.AuditRecord); ok {
 		return w.w.Write([]byte(strings.Join(csv.CSVHeader(), ",") + "\n"))
@@ -46,8 +56,8 @@ func (w *CSVWriter) WriteHeader(msg proto.Message) (int, error) {
 	panic("protocol buffer does not implement the types.AuditRecord interface")
 }
 
-func (w *CSVWriter) WriteRecord(msg proto.Message) (int, error) {
-
+// WriteRecord writes a protocol buffer into the CSV writer.
+func (w *CSVProtoWriter) WriteRecord(msg proto.Message) (int, error) {
 	w.Lock()
 	defer w.Unlock()
 
@@ -55,9 +65,6 @@ func (w *CSVWriter) WriteRecord(msg proto.Message) (int, error) {
 		return w.w.Write([]byte(strings.Join(csv.CSVRecord(), ",") + "\n"))
 	}
 
-	panic("can not write as CSV" + msg.String())
-}
-
-func (w *CSVWriter) Close() error {
-	return nil
+	spew.Dump(msg)
+	panic("can not write as CSV")
 }

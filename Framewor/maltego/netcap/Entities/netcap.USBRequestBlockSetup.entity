@@ -1,0 +1,10 @@
+<MaltegoEntity id="netcap.USBRequestBlockSetup" displayName="USBRequestBlockSetup" displayNamePlural="USBRequestBlockSetup" description="Universal Serial Bus (USB) is an industry standard that establishes specifications for cables and connectors and protocols for connection, communication and power supply (interfacing) between computers, peripherals and other computers" category="Netcap" smallIconResource="Netcap/USBRequestBlockSetup" largeIconResource="Netcap/USBRequestBlockSetup" allowedRoot="true" conversionOrder="2147483647" visible="true">
+ <Properties value="properties.usbrequestblocksetup" displayValue="properties.usbrequestblocksetup">
+  <Groups></Groups>
+  <Fields>
+   <Field name="properties.usbrequestblocksetup" type="string" nullable="true" hidden="false" readonly="false" description="" displayName="USBRequestBlockSetup">
+    <SampleValue>-</SampleValue>
+   </Field>
+  </Fields>
+ </Properties>
+</MaltegoEntity>

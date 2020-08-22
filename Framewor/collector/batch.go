@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,10 +16,10 @@ package collector
 import (
 	"time"
 
-	"github.com/dreadl0ck/netcap/encoder"
-	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/gopacket"
 	"github.com/dreadl0ck/gopacket/pcap"
+
+	"github.com/dreadl0ck/netcap/types"
 )
 
 // BatchInfo contains information about a Batch source.
@@ -30,19 +30,18 @@ type BatchInfo struct {
 
 // InitBatching initializes batching mode and returns an array of Batchinfos and the pcap handle
 // closing the handle must be done by the caller.
-func (c *Collector) InitBatching(maxSize int, bpf string, in string) ([]BatchInfo, *pcap.Handle, error) {
-
-	var chans = []BatchInfo{}
+func (c *Collector) InitBatching(bpf string, in string) ([]BatchInfo, *pcap.Handle, error) {
+	var chans []BatchInfo //nolint:prealloc
 
 	// open live handle
-	handle, err := pcap.OpenLive(in, 1024, true, 30*time.Minute)
+	handle, err := pcap.OpenLive(in, int32(c.config.SnapLen), true, 30*time.Minute)
 	if err != nil {
 		return chans, nil, err
 	}
 
 	// set BPF if requested
 	if bpf != "" {
-		err := handle.SetBPFFilter(bpf)
+		err = handle.SetBPFFilter(bpf)
 		if err != nil {
 			return chans, nil, err
 		}
@@ -57,31 +56,22 @@ func (c *Collector) InitBatching(maxSize int, bpf string, in string) ([]BatchInf
 		return chans, nil, err
 	}
 
-	// set live mode
-	encoder.LiveMode = true
-
-	// defer c.cleanup()
-
 	// read packets in background routine
 	go func() {
-		print("decoding packets... ")
-		for pack := range ps.Packets() {
+		for p := range ps.Packets() {
 			c.printProgressLive()
 
-			// if HTTP capture is desired, tcp stream reassembly needs to be performed.
-			// the gopacket/reassembly implementation does not allow packets to arrive out of order
-			// therefore the http decoding must not happen in a worker thread
-			// and instead be performed here to guarantee packets are being processed sequentially
-			if encoder.HTTPActive {
-				encoder.DecodeHTTP(pack)
-			}
-			c.handlePacket(pack)
+			// TODO: avoid duplicate alloc
+			c.handlePacket(&packet{
+				data: p.Data(),
+				ci:   p.Metadata().CaptureInfo,
+			})
 		}
 	}()
 
-	// get channels for all layer encoders
-	for _, encoders := range encoder.LayerEncoders {
-		for _, e := range encoders {
+	// get channels for all gopacket decoders
+	for _, decoders := range c.goPacketDecoders {
+		for _, e := range decoders {
 			chans = append(chans, BatchInfo{
 				Type: e.Type,
 				Chan: e.GetChan(),
@@ -89,11 +79,11 @@ func (c *Collector) InitBatching(maxSize int, bpf string, in string) ([]BatchInf
 		}
 	}
 
-	// get channels for all custom encoders
-	for _, e := range encoder.CustomEncoders {
+	// get channels for all custom decoders
+	for _, d := range c.customDecoders {
 		chans = append(chans, BatchInfo{
-			Type: e.Type,
-			Chan: e.GetChan(),
+			Type: d.GetType(),
+			Chan: d.GetChan(),
 		})
 	}
 

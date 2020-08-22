@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -35,70 +36,74 @@ var fieldsENIP = []string{
 	"DstPort",
 }
 
-func (e ENIP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (en *ENIP) CSVHeader() []string {
 	return filter(fieldsENIP)
 }
-func (e ENIP) CSVRecord() []string {
+
+// CSVRecord returns the CSV record for the audit record.
+func (en *ENIP) CSVRecord() []string {
 	// prevent accessing nil pointer
-	if e.Context == nil {
-		e.Context = &PacketContext{}
+	if en.Context == nil {
+		en.Context = &PacketContext{}
 	}
 	return filter([]string{
-		formatTimestamp(e.Timestamp),
-		formatUint32(e.Command),             // uint32
-		formatUint32(e.Length),              // uint32
-		formatUint32(e.SessionHandle),       // uint32
-		formatUint32(e.Status),              // uint32
-		hex.EncodeToString(e.SenderContext), // []byte
-		formatUint32(e.Options),             // uint32
-		e.CommandSpecific.String(),          // *ENIPCommandSpecificData
-		e.Context.SrcIP,
-		e.Context.DstIP,
-		e.Context.SrcPort,
-		e.Context.DstPort,
+		formatTimestamp(en.Timestamp),
+		formatUint32(en.Command),             // uint32
+		formatUint32(en.Length),              // uint32
+		formatUint32(en.SessionHandle),       // uint32
+		formatUint32(en.Status),              // uint32
+		hex.EncodeToString(en.SenderContext), // []byte
+		formatUint32(en.Options),             // uint32
+		en.CommandSpecific.String(),          // *ENIPCommandSpecificData
+		en.Context.SrcIP,
+		en.Context.DstIP,
+		en.Context.SrcPort,
+		en.Context.DstPort,
 	})
 }
 
-func (e ENIP) Time() string {
-	return e.Timestamp
+// Time returns the timestamp associated with the audit record.
+func (en *ENIP) Time() string {
+	return en.Timestamp
 }
 
-func (a ENIP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (en *ENIP) JSON() (string, error) {
+	en.Timestamp = utils.TimeToUnixMilli(en.Timestamp)
+	return jsonMarshaler.MarshalToString(en)
 }
 
-var (
-	enipMetric = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: strings.ToLower(Type_NC_ENIP.String()),
-			Help: Type_NC_ENIP.String() + " audit records",
-		},
-		fieldsENIP[1:],
-	)
+var enipMetric = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: strings.ToLower(Type_NC_ENIP.String()),
+		Help: Type_NC_ENIP.String() + " audit records",
+	},
+	fieldsENIP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(enipMetric)
+// Inc increments the metrics for the audit record.
+func (en *ENIP) Inc() {
+	enipMetric.WithLabelValues(en.CSVRecord()[1:]...).Inc()
 }
 
-func (a ENIP) Inc() {
-	enipMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
+// SetPacketContext sets the associated packet context for the audit record.
+func (en *ENIP) SetPacketContext(ctx *PacketContext) {
+	en.Context = ctx
 }
 
-func (a *ENIP) SetPacketContext(ctx *PacketContext) {
-	a.Context = ctx
-}
-
-func (a ENIP) Src() string {
-	if a.Context != nil {
-		return a.Context.SrcIP
+// Src returns the source address of the audit record.
+func (en *ENIP) Src() string {
+	if en.Context != nil {
+		return en.Context.SrcIP
 	}
 	return ""
 }
 
-func (a ENIP) Dst() string {
-	if a.Context != nil {
-		return a.Context.DstIP
+// Dst returns the destination address of the audit record.
+func (en *ENIP) Dst() string {
+	if en.Context != nil {
+		return en.Context.DstIP
 	}
 	return ""
 }

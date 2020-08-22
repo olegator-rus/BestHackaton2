@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -24,23 +25,28 @@ var fieldsEthernetCTP = []string{
 	"SkipCount", // int32
 }
 
-func (i EthernetCTP) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (i *EthernetCTP) CSVHeader() []string {
 	return filter(fieldsEthernetCTP)
 }
 
-func (i EthernetCTP) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (i *EthernetCTP) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(i.Timestamp),
 		formatInt32(i.SkipCount),
 	})
 }
 
-func (i EthernetCTP) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (i *EthernetCTP) Time() string {
 	return i.Timestamp
 }
 
-func (a EthernetCTP) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (i *EthernetCTP) JSON() (string, error) {
+	i.Timestamp = utils.TimeToUnixMilli(i.Timestamp)
+	return jsonMarshaler.MarshalToString(i)
 }
 
 var ethernetCTPMetric = prometheus.NewCounterVec(
@@ -51,21 +57,21 @@ var ethernetCTPMetric = prometheus.NewCounterVec(
 	fieldsEthernetCTP[1:],
 )
 
-func init() {
-	prometheus.MustRegister(ethernetCTPMetric)
+// Inc increments the metrics for the audit record.
+func (i *EthernetCTP) Inc() {
+	ethernetCTPMetric.WithLabelValues(i.CSVRecord()[1:]...).Inc()
 }
 
-func (a EthernetCTP) Inc() {
-	ethernetCTPMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
-}
+// SetPacketContext sets the associated packet context for the audit record.
+func (a *EthernetCTP) SetPacketContext(*PacketContext) {}
 
-func (a *EthernetCTP) SetPacketContext(ctx *PacketContext) {}
-
-// TODO
-func (a EthernetCTP) Src() string {
+// Src TODO.
+// Src returns the source address of the audit record.
+func (i *EthernetCTP) Src() string {
 	return ""
 }
 
-func (a EthernetCTP) Dst() string {
+// Dst returns the destination address of the audit record.
+func (i *EthernetCTP) Dst() string {
 	return ""
 }

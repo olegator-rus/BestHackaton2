@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -35,15 +36,18 @@ var fieldsIPv6 = []string{
 	"HopByHop",       // *IPv6HopByHop
 }
 
-func (i IPv6) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (i *IPv6) CSVHeader() []string {
 	return filter(fieldsIPv6)
 }
 
-func (i IPv6) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (i *IPv6) CSVRecord() []string {
 	var hop string
 	if i.HopByHop != nil {
-		hop = i.HopByHop.ToString()
+		hop = i.HopByHop.toString()
 	}
+
 	return filter([]string{
 		formatTimestamp(i.Timestamp),
 		formatInt32(i.Version),      // int32
@@ -60,20 +64,24 @@ func (i IPv6) CSVRecord() []string {
 	})
 }
 
-func (i IPv6) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (i *IPv6) Time() string {
 	return i.Timestamp
 }
 
-func (h IPv6HopByHop) ToString() string {
+func (h IPv6HopByHop) toString() string {
 	var opts []string
 	for _, o := range h.Options {
-		opts = append(opts, o.ToString())
+		opts = append(opts, o.toString())
 	}
-	return h.Timestamp + Separator + join(opts...)
+
+	return h.Timestamp + FieldSeparator + join(opts...)
 }
 
-func (a IPv6) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (i *IPv6) JSON() (string, error) {
+	i.Timestamp = utils.TimeToUnixMilli(i.Timestamp)
+	return jsonMarshaler.MarshalToString(i)
 }
 
 var (
@@ -114,7 +122,7 @@ var fieldsIPv6Metrics = []string{
 	"DstIP",        // string
 }
 
-func (i IPv6) metricValues() []string {
+func (i *IPv6) metricValues() []string {
 	return []string{
 		formatInt32(i.Version),      // int32
 		formatInt32(i.TrafficClass), // int32
@@ -126,32 +134,29 @@ func (i IPv6) metricValues() []string {
 	}
 }
 
-func init() {
-	prometheus.MustRegister(ip6Metric)
-	prometheus.MustRegister(ip6PayloadEntropy)
-	prometheus.MustRegister(ip6PayloadSize)
+// Inc increments the metrics for the audit record.
+func (i *IPv6) Inc() {
+	ip6Metric.WithLabelValues(i.metricValues()...).Inc()
+	ip6PayloadEntropy.WithLabelValues().Observe(i.PayloadEntropy)
+	ip6PayloadSize.WithLabelValues().Observe(float64(i.PayloadSize))
 }
 
-func (a IPv6) Inc() {
-	ip6Metric.WithLabelValues(a.metricValues()...).Inc()
-	ip6PayloadEntropy.WithLabelValues().Observe(a.PayloadEntropy)
-	ip6PayloadSize.WithLabelValues().Observe(float64(a.PayloadSize))
-}
-
-func (a *IPv6) SetPacketContext(ctx *PacketContext) {
-
+// SetPacketContext sets the associated packet context for the audit record.
+func (i *IPv6) SetPacketContext(ctx *PacketContext) {
 	// create new context and only add information that is
 	// not yet present on the audit record type
-	a.Context = &PacketContext{
+	i.Context = &PacketContext{
 		SrcPort: ctx.SrcPort,
 		DstPort: ctx.DstPort,
 	}
 }
 
-func (a IPv6) Src() string {
-	return a.SrcIP
+// Src returns the source address of the audit record.
+func (i *IPv6) Src() string {
+	return i.SrcIP
 }
 
-func (a IPv6) Dst() string {
-	return a.DstIP
+// Dst returns the destination address of the audit record.
+func (i *IPv6) Dst() string {
+	return i.DstIP
 }

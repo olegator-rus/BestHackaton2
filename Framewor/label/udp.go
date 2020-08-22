@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -14,28 +14,34 @@
 package label
 
 import (
+	"errors"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
 	"github.com/dreadl0ck/netcap/utils"
-	"github.com/gogo/protobuf/proto"
-	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
-// UDP labels type NC_UDP.
-func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separator, selection string) *pb.ProgressBar {
+// labelUDP labels type NC_UDP.
+func labelUDP(wg *sync.WaitGroup, file string, alerts []*suricataAlert, outDir, separator, selection string) *pb.ProgressBar {
 	var (
-		fname       = filepath.Join(outDir, "UDP.ncap.gz")
-		total       = netcap.Count(fname)
-		labelsTotal = 0
-		progress    = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
-		outFileName = filepath.Join(outDir, "UDP_labeled.csv")
+		fname           = filepath.Join(outDir, "UDP.ncap.gz")
+		total, errCount = netcap.Count(fname)
+		labelsTotal     = 0
+		progress        = pb.New(int(total)).Prefix(utils.Pad(utils.TrimFileExtension(file), 25))
+		outFileName     = filepath.Join(outDir, "UDP_labeled.csv")
 	)
+	if errCount != nil {
+		log.Fatal("failed to count audit records:", errCount)
+	}
 
 	go func() {
 		r, err := netcap.Open(fname, netcap.DefaultBufferSize)
@@ -44,7 +50,10 @@ func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separ
 		}
 
 		// read netcap header
-		header := r.ReadHeader()
+		header, errFileHeader := r.ReadHeader()
+		if errFileHeader != nil {
+			log.Fatal(errFileHeader)
+		}
 		if header.Type != types.Type_NC_UDP {
 			panic("file does not contain UDP records: " + header.Type.String())
 		}
@@ -77,8 +86,8 @@ func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separ
 
 	read:
 		for {
-			err := r.Next(udp)
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err = r.Next(udp)
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				break
 			} else if err != nil {
 				panic(err)
@@ -93,7 +102,6 @@ func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separ
 			// Unidirectional UDP packets
 			// checks if packet has a source or destination port matching an alert
 			for _, a := range alerts {
-
 				// must be a UDP packet
 				if a.Proto == "UDP" &&
 
@@ -105,7 +113,6 @@ func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separ
 
 					// AND source port must match
 					a.SrcPort == int(udp.SrcPort) {
-
 					if CollectLabels {
 						// only if it is not already part of the label
 						if !strings.Contains(finalLabel, a.Classification) {
@@ -115,27 +122,31 @@ func UDP(wg *sync.WaitGroup, file string, alerts []*SuricataAlert, outDir, separ
 								finalLabel += " | " + a.Classification
 							}
 						}
+
 						continue
 					}
 
 					// add label
-					f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + a.Classification + "\n")
+					_, _ = f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + a.Classification + "\n")
 					labelsTotal++
+
 					goto read
 				}
 			}
 
 			if len(finalLabel) != 0 {
 				// add final label
-				f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + finalLabel + "\n")
+				_, _ = f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + finalLabel + "\n")
 				labelsTotal++
+
 				goto read
 			}
 
 			// label as normal
-			f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + "normal\n")
+			_, _ = f.WriteString(strings.Join(udp.CSVRecord(), separator) + separator + "normal\n")
 		}
 		finish(wg, r, f, labelsTotal, outFileName, progress)
 	}()
+
 	return progress
 }

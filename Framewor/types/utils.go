@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -19,44 +19,49 @@ import (
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/dreadl0ck/netcap/utils"
 )
 
 var (
-	Begin     = "("
-	End       = ")"
-	Separator = "-"
+	// StructureBegin marks the beginning of a structure in CSV.
+	StructureBegin = "("
+
+	// StructureEnd marks the end of a structure in CSV.
+	StructureEnd = ")"
+
+	// FieldSeparator separates fields within a structure in CSV.
+	FieldSeparator = "-"
 )
 
-type Stringable interface {
-	ToString() string
+type stringer interface {
+	toString() string
 }
 
 // panic: value method github.com/dreadl0ck/netcap/types.LSUpdate.ToString called using nil *LSUpdate pointer
-// func toString(v Stringable) string {
+// func toString(v stringer) string {
 // 	if v != nil {
-// 		return v.ToString()
+// 		return v.toString()
 // 	}
 // 	return ""
 // }
 
-// this function wraps the ToString() function call with a nil pointer check
-func toString(c Stringable) string {
-
+// this function wraps the toString() function call with a nil pointer check.
+func toString(c stringer) string {
 	// make sure its not a nil pointer
 	// a simple nil check is apparently not enough here
 	if c == nil || (reflect.ValueOf(c).Kind() == reflect.Ptr && reflect.ValueOf(c).IsNil()) {
 		return ""
 	}
 
-	// now check if the Stringable interface is implemented
-	if str, ok := c.(Stringable); ok {
-		return str.ToString()
+	// now check if the stringer interface is implemented
+	if str, ok := c.(stringer); ok {
+		return str.toString()
 	}
 
-	// in case the Stringable interface is not implemented: fail
+	// in case the stringer interface is not implemented: fail
 	spew.Dump(c)
-	panic("toString called with an instance that does not implement the Stringable interface")
+	panic("toString called with an instance that does not implement the types.stringer interface")
 }
 
 func joinInts(a []int32) string {
@@ -64,14 +69,19 @@ func joinInts(a []int32) string {
 		b         strings.Builder
 		lastIndex = len(a) - 1
 	)
-	b.WriteString(Begin)
+
+	b.WriteString(StructureBegin)
+
 	for i, num := range a {
 		b.WriteString(formatInt32(num))
+
 		if i != lastIndex {
-			b.WriteString(Separator)
+			b.WriteString(FieldSeparator)
 		}
 	}
-	b.WriteString(End)
+
+	b.WriteString(StructureEnd)
+
 	return b.String()
 }
 
@@ -80,14 +90,19 @@ func joinUints(a []uint32) string {
 		b         strings.Builder
 		lastIndex = len(a) - 1
 	)
-	b.WriteString(Begin)
+
+	b.WriteString(StructureBegin)
+
 	for i, num := range a {
 		b.WriteString(formatUint32(num))
+
 		if i != lastIndex {
-			b.WriteString(Separator)
+			b.WriteString(FieldSeparator)
 		}
 	}
-	b.WriteString(End)
+
+	b.WriteString(StructureEnd)
+
 	return b.String()
 }
 
@@ -96,14 +111,19 @@ func join(a ...string) string {
 		b         strings.Builder
 		lastIndex = len(a) - 1
 	)
-	b.WriteString(Begin)
+
+	b.WriteString(StructureBegin)
+
 	for i, v := range a {
 		b.WriteString(v)
+
 		if i != lastIndex {
-			b.WriteString(Separator)
+			b.WriteString(FieldSeparator)
 		}
 	}
-	b.WriteString(End)
+
+	b.WriteString(StructureEnd)
+
 	return b.String()
 }
 
@@ -111,6 +131,7 @@ func formatTimestamp(ts string) string {
 	if UTC {
 		return utils.TimeToUTC(ts)
 	}
+
 	return ts
 }
 

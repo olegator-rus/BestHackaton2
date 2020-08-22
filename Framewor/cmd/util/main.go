@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,22 +11,34 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package util
 
 import (
-	"flag"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/utils"
 )
 
-func main() {
-
+// Run parses the subcommand flags and handles the arguments.
+func Run() {
 	// parse commandline flags
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.Usage = printUsage
+
+	err := fs.Parse(os.Args[2:])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *flagGenerateConfig {
+		netcap.GenerateConfig(fs, "util")
+
+		return
+	}
 
 	// print version and exit
 	if *flagVersion {
@@ -43,6 +55,32 @@ func main() {
 	// util to check if fields count matches for all generated rows
 	if *flagCheckFields {
 		checkFields()
+
 		return
+	}
+
+	if *flagEnv {
+		out, errEnv := exec.Command("env").CombinedOutput()
+		if errEnv != nil {
+			log.Fatal(errEnv)
+		}
+
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, "NC_") {
+				fmt.Println(line)
+			}
+		}
+
+		return
+	}
+
+	if *flagInterfaces {
+		utils.ListAllNetworkInterfaces()
+
+		return
+	}
+
+	if *flagIndex != "" {
+		indexData(*flagIndex)
 	}
 }

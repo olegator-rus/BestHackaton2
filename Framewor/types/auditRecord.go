@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,7 +11,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-// Contains the type definitions for the supported network protocols
+// Package types Contains the type definitions for the supported network protocols
 package types
 
 import (
@@ -21,14 +21,14 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/jsonpb"
-	proto "github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/mgutz/ansi"
 )
 
 var (
 	selection []int
 
-	// UTC allows to print timestamp in the utc format
+	// UTC allows to print timestamp in the utc format.
 	UTC bool
 
 	jsonMarshaler = &jsonpb.Marshaler{}
@@ -36,16 +36,16 @@ var (
 
 // AuditRecord is the interface for basic operations with NETCAP audit records
 // this includes dumping as CSV or JSON or prometheus metrics
-// and provides access to the timestamp of the audit record
+// and provides access to the timestamp of the audit record.
 type AuditRecord interface {
 
-	// returns CSV values
+	// CSVRecord returns CSV values
 	CSVRecord() []string
 
-	// returns CSV header fields
+	// CSVHeader returns CSV header fields
 	CSVHeader() []string
 
-	// used to retrieve the timestamp of the audit record for labeling
+	// Time used to retrieve the timestamp of the audit record for labeling
 	Time() string
 
 	// Src returns the source of an audit record
@@ -58,47 +58,51 @@ type AuditRecord interface {
 	// for Layer 3+ records this shall be the IP address
 	Dst() string
 
-	// increments the metric for the audit record
+	// Inc increments the metric for the audit record
 	Inc()
 
-	// returns the audit record as JSON
+	// JSON returns the audit record as JSON
 	JSON() (string, error)
 
-	// can be implemented to set additional information for each audit record
+	// SetPacketContext can be implemented to set additional information for each audit record
 	// important:
 	//  - MUST be implemented on a pointer of an instance
 	//  - the passed in packet context MUST be set on the Context field of the current audit record
 	SetPacketContext(ctx *PacketContext)
 }
 
-// selectFields returns an array with the indices of the desired fields for selection
+// selectFields returns an array with the indices of the desired fields for selection.
 func selectFields(all []string, selection string) (s []int) {
-
 	var (
 		fields = strings.Split(selection, ",")
 		ok     bool
 	)
 
 	s = make([]int, len(fields))
+
 	for i, val := range fields {
 		for index, name := range all {
 			if name == val {
 				s[i] = index
 				ok = true
+
 				break
 			}
 		}
+
 		if !ok {
 			fmt.Println("invalid field: ", ansi.Red+val+ansi.Reset)
 			fmt.Println("available fields: ", ansi.Yellow+strings.Join(all, ",")+ansi.Reset)
 			os.Exit(1)
 		}
+
 		ok = false
 	}
+
 	return s
 }
 
-// Select takes a proto.Message and sets the selection on the package level
+// Select takes a proto.Message and sets the selection on the package level.
 func Select(msg proto.Message, vals string) {
 	if vals != "" && vals != " " {
 		if p, ok := msg.(AuditRecord); ok {
@@ -110,14 +114,16 @@ func Select(msg proto.Message, vals string) {
 	}
 }
 
-// filter applies a selection if configured
+// filter applies a selection if configured.
 func filter(in []string) []string {
 	if len(selection) == 0 {
 		return in
 	}
+
 	r := make([]string, len(selection))
 	for i, v := range selection {
 		r[i] = in[v]
 	}
+
 	return r
 }

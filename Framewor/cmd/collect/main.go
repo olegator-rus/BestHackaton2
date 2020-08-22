@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,13 +11,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package collect
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/hex"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,12 +28,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	gzip "github.com/klauspost/pgzip"
-
 	"github.com/dreadl0ck/cryptoutils"
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dreadl0ck/netcap"
 	"github.com/dreadl0ck/netcap/types"
-	"github.com/gogo/protobuf/proto"
 )
 
 // maxBufferSize specifies the size of the buffers that
@@ -42,11 +42,21 @@ const (
 	maxBufferSize = 10 * 1024
 )
 
-func main() {
-
+// Run parses the subcommand flags and handles the arguments.
+func Run() {
 	// parse commandline flags
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.Usage = printUsage
+
+	err := fs.Parse(os.Args[2:])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *flagGenerateConfig {
+		netcap.GenerateConfig(fs, "collect")
+
+		return
+	}
 
 	// print version and exit
 	if *flagVersion {
@@ -59,17 +69,20 @@ func main() {
 	if *flagGenKeypair {
 
 		// generate a new keypair
-		pub, priv, err := cryptoutils.GenerateKeypair()
-		if err != nil {
-			panic(err)
+		pub, priv, errGenKey := cryptoutils.GenerateKeypair()
+		if errGenKey != nil {
+			panic(errGenKey)
 		}
 
 		// write public key to file on disk
-		pubFile, err := os.Create("pub.key")
-		if err != nil {
-			panic(err)
+		pubFile, errCreateKey := os.Create("pub.key")
+		if errCreateKey != nil {
+			panic(errCreateKey)
 		}
-		pubFile.WriteString(hex.EncodeToString(pub[:]))
+
+		if _, errWrite := pubFile.WriteString(hex.EncodeToString(pub[:])); errWrite != nil {
+			panic(errWrite)
+		}
 
 		// close file handle
 		err = pubFile.Close()
@@ -78,11 +91,14 @@ func main() {
 		}
 
 		// write private key to file on disk
-		privFile, err := os.Create("priv.key")
-		if err != nil {
-			panic(err)
+		privFile, errCreatePriv := os.Create("priv.key")
+		if errCreatePriv != nil {
+			panic(errCreatePriv)
 		}
-		privFile.WriteString(hex.EncodeToString(priv[:]))
+
+		if _, errWrite := privFile.WriteString(hex.EncodeToString(priv[:])); errWrite != nil {
+			panic(errWrite)
+		}
 
 		// close file handle
 		err = privFile.Close()
@@ -91,6 +107,7 @@ func main() {
 		}
 
 		fmt.Println("wrote keys")
+
 		return
 	}
 
@@ -103,9 +120,8 @@ func main() {
 	log.Fatal(udpServer(ctx, *flagAddr))
 }
 
-// udpServer implements a simple UDP server
+// udpServer implements a simple UDP server.
 func udpServer(ctx context.Context, address string) (err error) {
-
 	// ListenPacket provides a wrapper around ListenUDP
 	// eliminating the need to call net.ResolveUDPAddr
 	//
@@ -119,24 +135,31 @@ func udpServer(ctx context.Context, address string) (err error) {
 
 	// `Close`ing the packet "connection" means cleaning the data structures
 	// allocated for holding information about the listening socket.
-	defer pc.Close()
+	defer func() {
+		errClose := pc.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println("failed to close:", errClose)
+		}
+	}()
 
 	var (
-		doneChan = make(chan error, 1)
-		buffer   = make([]byte, maxBufferSize)
+		doneChan        = make(chan error, 1)
+		buffer          = make([]byte, maxBufferSize)
+		privKeyContents []byte
 	)
 
 	// run cleanup on signals
 	handleSignals()
 
 	// read private key file contents
-	privKeyContents, err := ioutil.ReadFile(*flagPrivKey)
+	privKeyContents, err = ioutil.ReadFile(*flagPrivKey)
 	if err != nil {
 		log.Fatal("failed to read private key file: ", err)
 	}
 
 	// hex decode private key
 	var serverPrivKey [cryptoutils.KeySize]byte
+
 	_, err = hex.Decode(serverPrivKey[:], privKeyContents)
 	if err != nil {
 		log.Fatal("failed to decode private key: ", err)
@@ -156,28 +179,31 @@ func udpServer(ctx context.Context, address string) (err error) {
 			// note.: `buffer` is not being reset between runs.
 			//	  It's expected that only `n` reads are read from it whenever
 			//	  inspecting its contents.
-			n, addr, err := pc.ReadFrom(buffer)
-			if err != nil {
-				doneChan <- err
+			// IMPORTANT: do not use the err variable in this closure! Don't shadow it, don't capture it!
+			n, addr, errRead := pc.ReadFrom(buffer)
+			if errRead != nil {
+				doneChan <- errRead
+
 				return
 			}
 
 			fmt.Printf("packet-received: bytes=%d from=%s\n", n, addr.String())
 
 			// create a copy of the data to allow reusing the buffer for the next incoming packet
-			var copyBuf = make([]byte, n)
+			copyBuf := make([]byte, n)
 			copy(copyBuf, buffer[:n])
 			buf := bytes.NewBuffer(copyBuf)
 
 			// spawn a new goroutine to handle packet data
 			go func() {
-
 				// trim off the public key of the peer
-				var pubKeyClient = [32]byte{}
+				pubKeyClient := [32]byte{}
+
 				for i, b := range buf.Bytes() {
 					if i == 32 {
 						break
 					}
+
 					pubKeyClient[i] = b
 				}
 
@@ -187,43 +213,50 @@ func udpServer(ctx context.Context, address string) (err error) {
 					panic("decryption failed")
 				}
 
-				var decryptedBuf = bytes.NewBuffer(decrypted)
+				decryptedBuf := bytes.NewBuffer(decrypted)
 
 				// create a new gzipped reader
-				gr, err := gzip.NewReader(decryptedBuf)
-				if err != nil {
+				// IMPORTANT: do not shadow or use the err variable from outside the closure!
+				gr, errProcess := gzip.NewReader(decryptedBuf)
+				if errProcess != nil {
 					fmt.Println(hex.Dump(decryptedBuf.Bytes()))
-					fmt.Println("gzip error", err)
+					fmt.Println("gzip error", errProcess)
+
 					return
 				}
 
 				// read data
-				c, err := ioutil.ReadAll(gr)
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					fmt.Println("failed to decompress batch", err)
+				var c []byte
+				c, errProcess = ioutil.ReadAll(gr)
+
+				if errors.Is(errProcess, io.EOF) || errors.Is(errProcess, io.ErrUnexpectedEOF) {
+					fmt.Println("failed to decompress batch", errProcess)
+
 					return
-				} else if err != nil {
+				} else if errProcess != nil {
 					fmt.Println(hex.Dump(buf.Bytes()))
-					fmt.Println("gzip error", err)
+					fmt.Println("gzip error", errProcess)
+
 					return
 				}
 
 				// close reader
-				err = gr.Close()
-				if err != nil {
-					panic(err)
+				errProcess = gr.Close()
+				if errProcess != nil {
+					panic(errProcess)
 				}
 
 				// init new batch
 				b := new(types.Batch)
 
 				// unmarshal batch data
-				err = proto.Unmarshal(c, b)
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					fmt.Println("failed to unmarshal batch", err)
+				errProcess = proto.Unmarshal(c, b)
+				if errors.Is(errProcess, io.EOF) || errors.Is(errProcess, io.ErrUnexpectedEOF) {
+					fmt.Println("failed to unmarshal batch", errProcess)
+
 					return
-				} else if err != nil {
-					panic(err)
+				} else if errProcess != nil {
+					panic(errProcess)
 				}
 
 				fmt.Println("decoded batch", b.MessageType, "from client", b.ClientID)
@@ -232,13 +265,14 @@ func udpServer(ctx context.Context, address string) (err error) {
 					protocol = strings.TrimPrefix(b.MessageType.String(), "NC_")
 					path     = filepath.Join(b.ClientID, protocol+".ncap.gz")
 				)
-				if a, ok := files[path]; ok {
-					_, err := a.gWriter.Write(b.Data)
-					if err != nil {
-						panic(err)
+
+				if a, exists := files[path]; exists {
+					_, errProcess = a.gWriter.Write(b.Data)
+					if errProcess != nil {
+						panic(errProcess)
 					}
 				} else {
-					files[path] = NewAuditRecordHandle(b, path)
+					files[path] = newAuditRecordHandle(b, path)
 				}
 			}()
 		}
@@ -246,12 +280,14 @@ func udpServer(ctx context.Context, address string) (err error) {
 
 	select {
 	case <-ctx.Done():
-		fmt.Println("cancelled")
+		fmt.Println("canceled")
+
 		err = ctx.Err()
 	case err = <-doneChan:
 		if err != nil {
 			log.Println("encountered an error while collecting audit records: ", err)
 		}
+
 		cleanup()
 	}
 

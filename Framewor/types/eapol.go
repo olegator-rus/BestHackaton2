@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,6 +16,7 @@ package types
 import (
 	"strings"
 
+	"github.com/dreadl0ck/netcap/utils"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -26,11 +27,13 @@ var fieldsEAPOL = []string{
 	"Length",  //  int32
 }
 
-func (a EAPOL) CSVHeader() []string {
+// CSVHeader returns the CSV header for the audit record.
+func (a *EAPOL) CSVHeader() []string {
 	return filter(fieldsEAPOL)
 }
 
-func (a EAPOL) CSVRecord() []string {
+// CSVRecord returns the CSV record for the audit record.
+func (a *EAPOL) CSVRecord() []string {
 	return filter([]string{
 		formatTimestamp(a.Timestamp),
 		formatInt32(a.Version), //  int32
@@ -39,12 +42,15 @@ func (a EAPOL) CSVRecord() []string {
 	})
 }
 
-func (a EAPOL) Time() string {
+// Time returns the timestamp associated with the audit record.
+func (a *EAPOL) Time() string {
 	return a.Timestamp
 }
 
-func (a EAPOL) JSON() (string, error) {
-	return jsonMarshaler.MarshalToString(&a)
+// JSON returns the JSON representation of the audit record.
+func (a *EAPOL) JSON() (string, error) {
+	a.Timestamp = utils.TimeToUnixMilli(a.Timestamp)
+	return jsonMarshaler.MarshalToString(a)
 }
 
 var eapPolMetric = prometheus.NewCounterVec(
@@ -55,21 +61,21 @@ var eapPolMetric = prometheus.NewCounterVec(
 	fieldsEAPOL[1:],
 )
 
-func init() {
-	prometheus.MustRegister(eapPolMetric)
-}
-
-func (a EAPOL) Inc() {
+// Inc increments the metrics for the audit record.
+func (a *EAPOL) Inc() {
 	eapPolMetric.WithLabelValues(a.CSVRecord()[1:]...).Inc()
 }
 
-func (a *EAPOL) SetPacketContext(ctx *PacketContext) {}
+// SetPacketContext sets the associated packet context for the audit record.
+func (a *EAPOL) SetPacketContext(*PacketContext) {}
 
-// TODO: return Mac addr
-func (a EAPOL) Src() string {
+// Src TODO: return Mac addr.
+// Src returns the source address of the audit record.
+func (a *EAPOL) Src() string {
 	return ""
 }
 
-func (a EAPOL) Dst() string {
+// Dst returns the destination address of the audit record.
+func (a *EAPOL) Dst() string {
 	return ""
 }

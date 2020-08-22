@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,10 +11,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -23,7 +24,6 @@ import (
 // sendUDP wraps the whole functionality of a UDP client that sends
 // a message and currently does not wait for a reply.
 func sendUDP(ctx context.Context, address string, reader io.Reader) error {
-
 	// in case a hostname is specified
 	// resolve the UDP address so that we can make use of DialUDP
 	// with an actual IP and port instead of a name
@@ -44,18 +44,27 @@ func sendUDP(ctx context.Context, address string, reader io.Reader) error {
 
 	// Closes the underlying file descriptor associated with the,
 	// socket so that it no longer refers to any file.
-	defer conn.Close()
+	defer func() {
+		errClose := conn.Close()
+		if errClose != nil && !errors.Is(errClose, io.EOF) {
+			fmt.Println("failed to close:", errClose)
+		}
+	}()
 
-	doneChan := make(chan error, 1)
+	var (
+		doneChan = make(chan error, 1)
+		n        int64
+	)
 
 	go func() {
 		// It is possible that this action blocks, although this
 		// should only occur in very resource-intensive situations:
 		// - when you've filled up the socket buffer and the OS
 		//   can't dequeue the queue fast enough.
-		n, err := io.Copy(conn, reader)
+		n, err = io.Copy(conn, reader)
 		if err != nil {
 			doneChan <- err
+
 			return
 		}
 
@@ -67,7 +76,8 @@ func sendUDP(ctx context.Context, address string, reader io.Reader) error {
 
 	select {
 	case <-ctx.Done():
-		fmt.Println("cancelled")
+		fmt.Println("canceled")
+
 		err = ctx.Err()
 	case err = <-doneChan:
 	}

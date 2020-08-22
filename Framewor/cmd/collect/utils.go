@@ -1,6 +1,6 @@
 /*
  * NETCAP - Traffic Analysis Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -11,10 +11,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package collect
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -26,26 +25,23 @@ import (
 func printHeader() {
 	netcap.PrintLogo()
 	fmt.Println()
-	fmt.Println("usage examples:")
-	fmt.Println("	$ net.collect -privkey priv.key -addr 127.0.0.1:4200")
-	fmt.Println("	$ net.collect -gen-keypair")
+	fmt.Println("collect tool usage examples:")
+	fmt.Println("	$ net collect -privkey priv.key -addr 127.0.0.1:4200")
+	fmt.Println("	$ net collect -gen-keypair")
 	fmt.Println()
 }
 
-// usage prints the use
+// usage prints the use.
 func printUsage() {
 	printHeader()
-	flag.PrintDefaults()
+	fs.PrintDefaults()
 }
 
 func cleanup() {
-
 	fmt.Println("cleanup")
 
 	// cleanup
-	for p, a := range files {
-
-		// flush and close gzip writer
+	for p, a := range files { // flush and close gzip writer
 		err := a.gWriter.Flush()
 		if err != nil {
 			panic(err)
@@ -83,7 +79,7 @@ func handleSignals() {
 	go func() {
 		sig := <-sigs
 
-		fmt.Println("received signal:", sig)
+		fmt.Println("\nreceived signal:", sig)
 
 		fmt.Println("exiting")
 

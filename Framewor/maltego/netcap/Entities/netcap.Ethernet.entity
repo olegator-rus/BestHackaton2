@@ -1,0 +1,10 @@
+<MaltegoEntity id="netcap.Ethernet" displayName="Ethernet" displayNamePlural="Ethernet" description="Ethernet is a family of computer networking technologies commonly used in local area networks, metropolitan area networks and wide area networks" category="Netcap" smallIconResource="Netcap/Ethernet" largeIconResource="Netcap/Ethernet" allowedRoot="true" conversionOrder="2147483647" visible="true">
+ <Properties value="properties.ethernet" displayValue="properties.ethernet">
+  <Groups></Groups>
+  <Fields>
+   <Field name="properties.ethernet" type="string" nullable="true" hidden="false" readonly="false" description="" displayName="Ethernet">
+    <SampleValue>-</SampleValue>
+   </Field>
+  </Fields>
+ </Properties>
+</MaltegoEntity>

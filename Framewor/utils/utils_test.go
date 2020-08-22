@@ -1,3 +1,16 @@
+/*
+ * NETCAP - Traffic Analysis Framework
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 package utils
 
 import (
@@ -22,7 +35,7 @@ func isDot(r rune) bool {
 
 // TimeToStringOld is the old implementation for timeToString
 func TimeToStringOld(t time.Time) string {
-	micro := fmt.Sprintf("%06d", t.Nanosecond()/1000)
+	micro := fmt.Sprintf("%05d", t.Nanosecond()/1000)
 	return strconv.FormatInt(t.Unix(), 10) + "." + micro
 }
 
@@ -47,9 +60,39 @@ func StringToTimeFieldsFunc(val string) time.Time {
 	return time.Time{}
 }
 
+//func TestChopTransportIdent(t *testing.T) {
+//	res := ChopTransportIdent("192.168.1.47->165.227.109.154-53032->80")
+//	if res != "53032->80" {
+//		t.Fatal("got", res, "expected: 53032->80")
+//	}
+//}
+
+func TestReverseIdent(t *testing.T) {
+	res := ReverseIdent("192.168.1.47->165.227.109.154-53032->80")
+	if res != "165.227.109.154->192.168.1.47-80->53032" {
+		t.Fatal("got", res, "expected: 165.227.109.154->192.168.1.47-80->53032")
+	}
+}
+
+func TestParseIdent(t *testing.T) {
+	srcIP, srcPort, dstIP, dstPort := ParseIdent("192.168.1.47->165.227.109.154-53032->80")
+	if srcIP != "192.168.1.47" {
+		t.Fatal("got srcIP", srcIP, "expected: 192.168.1.47")
+	}
+	if srcPort != "53032" {
+		t.Fatal("got srcPort", srcPort, "expected: 53032")
+	}
+	if dstIP != "165.227.109.154" {
+		t.Fatal("got dstIP", dstIP, "expected: 165.227.109.154")
+	}
+	if dstPort != "80" {
+		t.Fatal("got dstPort", dstPort, "expected: 80")
+	}
+}
+
 func TestTimeToString(t *testing.T) {
 	if TimeToString(ti) != TimeToStringOld(ti) {
-		t.Fatal("not the same")
+		t.Fatal("not the same: TimeToString(ti) != TimeToStringOld(ti)", TimeToString(ti), " != ", TimeToStringOld(ti))
 	}
 }
 
@@ -70,7 +113,6 @@ func BenchmarkTimeToString(b *testing.B) {
 }
 
 func TestStringToTime(t *testing.T) {
-
 	tim := StringToTime(tiStr)
 
 	if !tim.Equal(ti) {
@@ -79,7 +121,6 @@ func TestStringToTime(t *testing.T) {
 }
 
 func BenchmarkStringToTime(b *testing.B) {
-
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -89,13 +130,12 @@ func BenchmarkStringToTime(b *testing.B) {
 }
 
 func BenchmarkStringToTimeFieldsFunc(b *testing.B) {
-
-	var tiStr = TimeToString(ti)
+	tiString := TimeToString(ti)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		StringToTimeFieldsFunc(tiStr)
+		StringToTimeFieldsFunc(tiString)
 	}
 }
 

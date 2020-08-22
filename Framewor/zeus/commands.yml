@@ -13,7 +13,7 @@ language: bash
 # globals for all commands
 globals:
     # NETCAP version
-    VERSION: 0.4.7
+    VERSION:  0.5.2
 
 # command data
 commands:
@@ -21,61 +21,14 @@ commands:
     ## Install all
     ##
 
-    install:
-        description: install netcap and netlabel to $PATH
-        buildNumber: true
-        help: Installs the applications to the default system location
-        dependencies:
-            - net.capture
-            - net.label
-            - net.collect
-            - net.agent
-            - net.proxy
-            - net.export
-            - net.dump
-            - net.util
-        exec: echo done
-
-    ## Compile Framework Components
-    ##
-
     ## linker flags
     #   -w	disable DWARF generation
     #   -s	disable symbol table
-
-    net.capture:
-        description: compile net.capture binary to $GOPATH/bin
+    install:
+        description: install netcap and netlabel to $PATH
         buildNumber: true
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.capture -i github.com/dreadl0ck/netcap/cmd/capture
-
-    net.label:
-        description: compile net.label binary to $GOPATH/bin
-        buildNumber: true
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.label -i github.com/dreadl0ck/netcap/cmd/label
-
-    net.agent:
-        description: compile net.agent binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.agent -i github.com/dreadl0ck/netcap/cmd/agent
-
-    net.collect:
-        description: compile net.collect binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.collect -i github.com/dreadl0ck/netcap/cmd/collect
-
-    net.proxy:
-        description: compile net.proxy binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.proxy -i github.com/dreadl0ck/netcap/cmd/proxy
-    
-    net.export:
-        description: compile net.export binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.export -i github.com/dreadl0ck/netcap/cmd/export
-
-    net.dump:
-        description: compile net.dump binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.dump -i github.com/dreadl0ck/netcap/cmd/dump
-
-    net.util:
-        description: compile net.util binary to $GOPATH/bin
-        exec: go build -ldflags "-s -w" -o $(go env GOPATH)/bin/net.util -i github.com/dreadl0ck/netcap/cmd/util
+        help: Compiles and moves the netcap binary to /usr/local/bin
+        exec: go build -ldflags "-s -w" -o /usr/local/bin/net -i github.com/dreadl0ck/netcap/cmd
 
     ## Debug Builds
     ##
@@ -84,18 +37,18 @@ commands:
         description: install a netcap build with race detection enabled
         buildNumber: true
         help: Install the race build to the default system location
-        exec: GO111MODULE=on go build -ldflags "-s -w -X github.com/dreadl0ck/netcap.Version=v${VERSION}-race" -race -o $(go env GOPATH)/bin/net.capture -i github.com/dreadl0ck/netcap/cmd/capture
+        exec: GO111MODULE=on go build -ldflags "-s -w -X github.com/dreadl0ck/netcap.Version=v${VERSION}-race" -race -o /usr/local/bin/net -i github.com/dreadl0ck/netcap/cmd
 
     ## Containers
     ##
 
-    build-all-alpine-docker:
+    build-alpine-docker:
         description: build all framework binaries for linux inside an apline docker container
         help: used to compile for linux on macOS because cross compilation is a pain with CGO
         dependencies:
             - clean
     
-    build-all-ubuntu-docker:
+    build-ubuntu-docker:
         description: build all framework binaries for linux inside an ubuntu docker container
         help: used to compile for linux on macOS because cross compilation is a pain with CGO
         dependencies:
@@ -112,6 +65,7 @@ commands:
             - version-bump
             - check-version
             - gen-proto-release
+            - build-linux
         exec: goreleaser release --rm-dist
 
     # run a test release
@@ -119,9 +73,10 @@ commands:
         description: test run to release a new version
         dependencies:
             - gen-version
-            #- check-version
+            - version-bump-test
             - gen-proto-release
-        exec: goreleaser release --rm-dist --skip-publish --skip-validate #--debug
+            - build-linux
+        exec: goreleaser release --rm-dist --skip-publish --skip-validate; zeus version-bump-test-undo
 
     ## Utils
     ##
@@ -135,13 +90,13 @@ commands:
     # count lines of code
     cloc:
         description: count lines of code for the project
-        exec: cloc --exclude-ext pb.go,py,rb,js,cpp,cc,rs,java,swift,c,cs,h cmd metrics label types utils io collector encoder netcap.go reader.go utils.go writer.go
+        exec: cloc --exclude-ext pb.go,py,rb,js,cpp,cc,rs,java,swift,c,cs,h delimited cmd metrics label types utils io collector decoder netcap.go reader.go utils.go writer.go maltego resolvers dpi
 
     # generate protocol buffers for development
     gen-proto-dev:
         description: generate protocol buffers
         help: proto compiler must be installed with gogofaster plugin
-        exec: protoc --gogofaster_out=types/. --python_out=pynetcap netcap.proto
+        exec: protoc --gogofaster_out=types/. netcap.proto
 
     # generate protocol buffers for release
     gen-proto-release:
@@ -149,18 +104,24 @@ commands:
         help: proto compiler must be installed with all required plugins
         exec: |
             mkdir -p types/{python,java,swift,rust,cpp,csharp,js}
-            protoc --gogofaster_out=types/. --python_out=types/python --java_out=types/java --swift_out=types/swift --rust_out=types/rust --cpp_out=types/cpp --csharp_out=types/csharp --js_out=types/js netcap.proto
+            #protoc --gogofaster_out=types/. --python_out=types/python --java_out=types/java --swift_out=types/swift --rust_out=types/rust --cpp_out=types/cpp --csharp_out=types/csharp --js_out=types/js netcap.proto
+            protoc --gogofaster_out=types/. --python_out=types/python --java_out=types/java --swift_out=types/swift --cpp_out=types/cpp --csharp_out=types/csharp --js_out=types/js netcap.proto
 
     # the version defined in the globals section will be set via ldflags on each build
     # to ensure the correct version is also set for installation via go get
     # a version.go file is generated on each release with the corresponding version number
     gen-version:
-        description: generate the version.go file
+        description: set the correct project version
+        help: generates the version.go file
         exec: |
-            echo -e "// Netcap is a framework for network packet processing at the protocol level. Learn more at https://netcap.io.\npackage netcap\n\n// Netcap version.\nvar Version = \"v${VERSION}\"\nvar Commit = \"$(git rev-parse HEAD | tr -d "\n")\"" > version.go
+            echo -e "// Package netcap is a framework for network traffic analysis. Learn more at https://netcap.io.\npackage netcap\n\n// Netcap version.\nvar Version = \"v${VERSION}\"\nvar commit = \"$(git rev-parse HEAD | tr -d "\n")\"" > version.go
+            sed "s/.*ENV VERSION.*/ENV VERSION ${VERSION}/" Dockerfile-ubuntu > Dockerfile-ubuntu-cp
+            mv Dockerfile-ubuntu-cp Dockerfile-ubuntu
+            sed "s/.*ENV VERSION.*/ENV VERSION ${VERSION}/" Dockerfile-alpine > Dockerfile-alpine-cp
+            mv Dockerfile-alpine-cp Dockerfile-alpine
 
     # build and push the Alpine docker container
-    build-all-linux:
+    build-linux:
         description: builds the alpine and ubuntu docker containers
     
     # check git version
@@ -187,10 +148,28 @@ commands:
             git push origin v${VERSION}
 
             echo "[INFO] version bumped to v${VERSION}"
+
+    # bump the git version tag
+    version-bump-test:
+        description: bump framework version and add git version tag
+        exec: |
+            git tag -a v${VERSION} -m "v${VERSION} release test"
+            echo "[INFO] added test tag v${VERSION}"
+
+    # bump the git version tag
+    version-bump-test-undo:
+        description: bump framework version and add git version tag
+        exec: |
+            git tag -d v${VERSION}
+            echo "[INFO] removed test tag v${VERSION}"
     
     static-analyze:
         description: run the golangci-lint static source code analyzer
         exec: golangci-lint run
+
+    gosec-analyze:
+        description: run the gosec static source code analyzer
+        exec: gosec ./...
 
     delete-tag:
         description: delete tag locally and remotely
@@ -198,4 +177,146 @@ commands:
             - tag:String
         exec: |
             git tag -d $tag
-            git push --delete origin $tag
+            # dont delete remote by default
+            #git push --delete origin $tag
+
+    download-test-pcaps:
+        description: fetches the pcap files for the unit tests
+        help: uses git, wget and 7za to download several test pcap files
+        exec: |
+            mkdir -p tests && cd tests
+            wget https://weberblog.net/wp-content/uploads/2020/02/The-Ultimate-PCAP.7z
+            7za x The-Ultimate-PCAP.7z
+            git clone https://github.com/wireshark/wireshark
+            gunzip wireshark/test/captures/*.gz
+            git clone https://github.com/kbandla/pcaps
+            git clone https://github.com/automayt/ICS-pcap
+            mv tests/ICS-pcap/FINS\ \(OMRON\) tests/ICS-pcap/FINS-OMRON
+            mv tests/ICS-pcap/ETHERNET_IP/digitalbond\ pcaps tests/ICS-pcap/ETHERNET_IP/digitalbond-pcaps
+            mv tests/ICS-pcap/MODBUS/digitalbond\ pcaps tests/ICS-pcap/MODBUS/digitalbond-pcaps
+            mv tests/ICS-pcap/DNP3/digitalbond\ pcaps tests/ICS-pcap/DNP3/digitalbond-pcaps
+            git clone https://github.com/tatsui-geek/malware-traffic-analysis.net
+            git clone https://github.com/rahard/pcapfiles.git
+            git clone https://github.com/markofu/pcaps.git morepcaps
+            rm -f morepcaps/PracticalPacketAnalysis/ppa-capture-files/http-fault-post.pcap
+            git clone https://github.com/odedshimon/BruteShark
+
+    test-pcaps:
+        exec: |
+            trap 'exit 0' INT
+            redcolor()(set -o pipefail;"$@" 2>&1>&3|sed $'s,.*,\e[31m&\e[m,'>&2)3>&1
+            for f in $(find tests -type f -name "*.pcap" -o -name "*.pcapng"); do
+                echo "net capture -read "$f" -out "$f.net" -quiet -time -ignore-unknown"
+                redcolor net capture -read "$f" -out "$f.net" -quiet -time -ignore-unknown || :
+                rm -rf "$f.net"
+            done
+
+    test-pcaps-dev:
+        exec: |
+            trap 'exit 0' INT
+            for f in $(find tests -type f -name "*.pcap" -o -name "*.pcapng"); do
+                echo "$f -> net capture -read "$f" -out "$f.net""
+                net capture -read "$f" -out "$f.net"
+                rm -rf "$f.net"
+            done
+
+    merge-test-pcaps:
+        exec: |
+            rm -f tests/merged.pcapng
+            while IFS= read -r line; do
+                FILES+=("$line")
+            done < <(find tests -type f -name "*.pcap" -o -name "*.pcapng" | sort)
+            declare -p FILES
+            mergecap -w tests/merged.pcapng "${FILES[@]}"
+            du -h tests/merged.pcapng
+
+    pack-dbs:
+        description: pack all dbs that can be shared as a zip archive
+        help: the resulting archive will be put into the resolvers folder
+        exec: cd /usr/local/etc/netcap && zip -r resolver-dbs.zip /usr/local/etc/netcap/dbs -x *.mmdb *hosts* && cd - && cp /usr/local/etc/netcap/resolver-dbs.zip resolvers/resolver-dbs.zip
+
+    install-bash-completion:
+        description: install the bash-completion for netcap
+        exec: cp cmd/net /usr/local/etc/bash_completion.d/net && . /usr/local/etc/bash_completion.d/net
+
+    run-grafana:
+        description: start grafana service locally
+        exec: grafana-server --homepath /usr/local/opt/grafana/share/grafana
+
+    run-prometheus:
+        description: start prometheus daemon locally
+        exec: prometheus --config.file prometheus/prometheus.yml
+
+    download-vulndbs:
+        description: download vulnerability databases
+        exec: |
+            # from https://github.com/scipag/vulscan
+            mkdir vulnDBs
+            cd vulnDBs
+            wget https://www.computec.ch/projekte/vulscan/download/cve.csv
+            wget https://www.computec.ch/projekte/vulscan/download/exploitdb.csv
+            wget https://www.computec.ch/projekte/vulscan/download/openvas.csv
+            wget https://www.computec.ch/projekte/vulscan/download/osvdb.csv
+            wget https://www.computec.ch/projekte/vulscan/download/scipvuldb.csv
+            wget https://www.computec.ch/projekte/vulscan/download/securityfocus.csv
+            wget https://www.computec.ch/projekte/vulscan/download/securitytracker.csv
+            wget https://www.computec.ch/projekte/vulscan/download/xforce.csv
+            echo "done, downloaded:"
+            du -h vulnDBs
+
+    fix-maltego-permissions:
+        description: fix the permissions for Java and Maltego on macOS
+        help: Maltego requires certain paths to be owned by the current user, or the program will not start
+        exec: |
+            echo "changing ownership to the current user $USER, for system paths that are relevant to Maltego."
+            sudo chown -R $USER /Library/Java/JavaVirtualMachines
+            sudo chown -R $USER /Applications/Maltego.app
+            sudo chown -R $USER "/Users/$USER/Library/Application Support/maltego"
+
+    profile-io:
+        exec: |
+            if [[ ! -d FlameGraph ]]; then
+                git clone https://github.com/brendangregg/FlameGraph
+            fi
+            cd FlameGraph && curl -s 'localhost:6060/debug/fgprof?seconds=3&format=folded' > fgprof.folded
+            ./flamegraph.pl fgprof.folded > fgprof.svg
+            open fgprof.svg
+
+    profile-io-fprof:
+        exec: |
+            go tool pprof --http=:6061 http://localhost:6060/debug/fgprof?seconds=3 > fgprof.folded
+
+    profile-io-pprof:
+        exec: |
+            go tool pprof --http=:6061 http://localhost:6060/debug/pprof?seconds=3 > fgprof.folded
+
+    lint:
+        exec: golangci-lint --timeout=10m run ./...
+
+    gosec:
+        exec: gosec ./...
+
+    test:
+        exec: go test ./...
+
+    test-verbose:
+        exec: go test -v ./...
+
+    bench:
+        exec: go test -v -bench=. ./...
+
+    format-code:
+        exec: |
+
+            # TODO: recursive ./... does not seem to be supported
+            gofumpt -w *.go
+            gofumpt -w ./*/*.go
+            gofumpt -w ./*/*/*.go
+
+            gofumports -w -v .
+
+            gci -w -local github.com/dreadl0ck/netcap .
+
+    make-icons:
+        exec: |
+            go test -v -run="GenerateAuditRecordIcons" -tags="icons" github.com/dreadl0ck/netcap/maltego

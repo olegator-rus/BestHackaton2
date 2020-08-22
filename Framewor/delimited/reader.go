@@ -1,6 +1,6 @@
 /*
  * NETCAP - Network Capture Framework
- * Copyright (c) 2017 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
+ * Copyright (c) 2017-2020 Philipp Mieden <dreadl0ck [at] protonmail [dot] ch>
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
@@ -16,17 +16,18 @@ package delimited
 import (
 	"bufio"
 	"encoding/binary"
-	"github.com/gogo/protobuf/proto"
 	"io"
+
+	"github.com/gogo/protobuf/proto"
 )
 
-// Reader reads length-delimited records from a byte data source
+// Reader reads length-delimited records from a byte data source.
 type Reader struct {
 	data   []byte
 	buffer *bufio.Reader
 }
 
-// NewReader returns a new delimited Reader for the records in r
+// NewReader returns a new delimited Reader for the records in r.
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
 		buffer: bufio.NewReader(r),
@@ -41,7 +42,6 @@ func NewReader(r io.Reader) *Reader {
 //
 // The slice returned is valid only until a subsequent call to Next.
 func (r *Reader) Next() ([]byte, error) {
-
 	// read size
 	size, err := binary.ReadUvarint(r.buffer)
 	if err != nil {
@@ -56,16 +56,16 @@ func (r *Reader) Next() ([]byte, error) {
 	}
 
 	// read data from buffer
-	if _, err := io.ReadFull(r.buffer, r.data); err != nil {
+	if _, err = io.ReadFull(r.buffer, r.data); err != nil {
 		return nil, err
 	}
+
 	return r.data, nil
 }
 
 // NextProto consumes the next available record by calling r.Next
-// and decodes it into protobuf using proto.Unmarshal()
+// and decodes it into protobuf using proto.Unmarshal().
 func (r *Reader) NextProto(pb proto.Message) error {
-
 	// fetch next record
 	rec, err := r.Next()
 	if err != nil {
